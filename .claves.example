@@ -1,0 +1,15 @@
+# Copia este archivo a .env.local (o .claves y carga con tu script)
+# No subas .env.local ni .claves a git
+
+# Firebase (proyecto uRoutes8-Admon)
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+
+# Token de 3 caracteres alfanuméricos para dar de alta o baja usuarios (ej: A1b)
+VITE_TOKEN_ALTAS_BAJAS=
+
+# Recordatorio: crear en Firebase Console un usuario (ej. mm@uroutes-admin.local) con contraseña mm para el login admin
