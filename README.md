@@ -1,11 +1,11 @@
 # uRoutes Admin
 
-Panel de administración para gestionar empresas, usuarios y bitácoras (proyecto uRoutes8-Admon).
+Panel de administración para gestionar empresas, usuarios y bitácoras (proyecto uRoutes8).
 
 ## Requisitos
 
 - Node 18+
-- Proyecto Firebase **uRoutes8-Admon** con Auth (Email/Password) y Firestore activados.
+- Proyecto Firebase **uRoutes8** con Auth (Email/Password) y Firestore activados.
 
 ## Configuración
 
@@ -31,7 +31,7 @@ Panel de administración para gestionar empresas, usuarios y bitácoras (proyect
    VITE_FIREBASE_APP_ID=...
    ```
 
-4. **Reglas de Firestore (obligatorio para que guardar funcione):** En Firebase Console del proyecto uRoutes8-Admon → Firestore Database → pestaña **Reglas**, pega el contenido del archivo `firestore.rules` de este repo y pulsa **Publicar**. Sin esto, las escrituras fallan o se quedan colgadas.
+4. **Reglas de Firestore (obligatorio para que guardar funcione):** En Firebase Console del proyecto uRoutes8 → Firestore Database → pestaña **Reglas**, pega el contenido del archivo `firestore.rules` de este repo y pulsa **Publicar**. Sin esto, las escrituras fallan o se quedan colgadas.
 
 5. Arranca en desarrollo:
 
@@ -55,7 +55,7 @@ Panel de administración para gestionar empresas, usuarios y bitácoras (proyect
 ./deploy.sh
 ```
 
-Requisitos: [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) instalado y `gcloud login` hecho. El script usa el proyecto por defecto `uroutes8-admon` y la región `us-central1`; puedes sobreescribir con `GCP_PROJECT_ID`, `GCP_REGION` y `CLOUD_RUN_SERVICE`.
+Requisitos: [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) instalado y `gcloud login` hecho. El script usa el proyecto por defecto `uroutes8` y la región `us-central1`; puedes sobreescribir con `GCP_PROJECT_ID`, `GCP_REGION` y `CLOUD_RUN_SERVICE`.
 
 Si tienes `.env.local`, las variables `VITE_*` se pasan al build en Cloud Run para que Firebase quede configurado en la app desplegada.
 

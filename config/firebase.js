@@ -7,7 +7,7 @@ const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
 
 if (!apiKey || !projectId) {
   throw new Error(
-    "Faltan variables de Firebase. Copia .claves.example a .env.local y rellena VITE_FIREBASE_API_KEY y VITE_FIREBASE_PROJECT_ID (proyecto uRoutes8-Admon)."
+    "Faltan variables de Firebase. Copia .claves.example a .env.local y rellena VITE_FIREBASE_API_KEY y VITE_FIREBASE_PROJECT_ID (proyecto uRoutes8)."
   );
 }
 

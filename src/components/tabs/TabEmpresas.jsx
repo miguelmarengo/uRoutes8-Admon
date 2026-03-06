@@ -14,7 +14,7 @@ export const TabEmpresas = () => {
   const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ nombre: "", firebaseConfigJson: "" });
+  const [form, setForm] = useState({ nombre: "", firebaseConfigJson: "", llaves: "" });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
@@ -78,7 +78,7 @@ export const TabEmpresas = () => {
 
   const openCreate = () => {
     setEditingId(null);
-    setForm({ nombre: "", firebaseConfigJson: "" });
+    setForm({ nombre: "", firebaseConfigJson: "", llaves: "" });
     setError(null);
     setModalOpen(true);
   };
@@ -88,9 +88,8 @@ export const TabEmpresas = () => {
     const config = item.firebaseConfig;
     setForm({
       nombre: item.nombre ?? "",
-      firebaseConfigJson: config
-        ? JSON.stringify(config, null, 2)
-        : "",
+      firebaseConfigJson: config ? JSON.stringify(config, null, 2) : "",
+      llaves: item.llaves ?? "",
     });
     setError(null);
     setModalOpen(true);
@@ -99,7 +98,7 @@ export const TabEmpresas = () => {
   const closeModal = () => {
     setModalOpen(false);
     setEditingId(null);
-    setForm({ nombre: "", firebaseConfigJson: "" });
+    setForm({ nombre: "", firebaseConfigJson: "", llaves: "" });
   };
 
   const handleSubmit = async (e) => {
@@ -133,11 +132,13 @@ export const TabEmpresas = () => {
         if (editingId) {
           await updateEmpresa(editingId, {
             nombre: form.nombre.trim(),
+            llaves: form.llaves.trim(),
             firebaseConfig: firebaseConfig === null ? deleteField() : firebaseConfig,
           });
         } else {
           await addEmpresa({
             nombre: form.nombre.trim(),
+            llaves: form.llaves.trim(),
             ...(firebaseConfig != null && { firebaseConfig }),
           });
         }
@@ -211,6 +212,7 @@ export const TabEmpresas = () => {
               <tr>
                 <th className="px-4 py-3 font-medium">Nombre</th>
                 <th className="px-4 py-3 font-medium w-20 text-center">Firebase</th>
+                <th className="px-4 py-3 font-medium w-20 text-center">Llaves</th>
                 <th className="px-4 py-3 font-medium w-28 text-right">Acciones</th>
               </tr>
             </thead>
@@ -221,6 +223,15 @@ export const TabEmpresas = () => {
                   <td className="px-4 py-3 text-center">
                     {item.firebaseConfig?.projectId ? (
                       <span className="inline-flex items-center gap-1 text-primary" title="Proyecto configurado">
+                        <CheckCircle className="w-4 h-4" />
+                      </span>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {item.llaves?.trim() ? (
+                      <span className="inline-flex items-center gap-1 text-primary" title="Llaves configuradas">
                         <CheckCircle className="w-4 h-4" />
                       </span>
                     ) : (
@@ -303,8 +314,20 @@ export const TabEmpresas = () => {
                 <textarea
                   value={form.firebaseConfigJson}
                   onChange={(e) => setForm((f) => ({ ...f, firebaseConfigJson: e.target.value }))}
-                  className="w-full px-4 py-2 rounded-lg bg-surface-200 border border-border text-white placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary font-mono text-xs min-h-[140px] resize-y"
+                  className="w-full px-4 py-2 rounded-lg bg-surface-200 border border-border text-white placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary font-mono text-xs min-h-[100px] resize-y"
                   placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'
+                  spellCheck={false}
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-muted mb-1">
+                  Llaves / Credenciales Extra (Texto multilínea)
+                </label>
+                <textarea
+                  value={form.llaves}
+                  onChange={(e) => setForm((f) => ({ ...f, llaves: e.target.value }))}
+                  className="w-full px-4 py-2 rounded-lg bg-surface-200 border border-border text-white placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary font-mono text-xs min-h-[140px] resize-y"
+                  placeholder="Pega aquí cualquier configuración adicional, llaves de API, o texto de muchos renglones..."
                   spellCheck={false}
                 />
               </div>

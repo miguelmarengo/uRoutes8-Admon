@@ -3,7 +3,7 @@ set -e
 cd "$(dirname "$0")"
 
 # Configuración: proyecto y región de Cloud Run
-PROJECT_ID="${GCP_PROJECT_ID:-uroutes8-admon}"
+PROJECT_ID="${GCP_PROJECT_ID:-uroutes8}"
 REGION="${GCP_REGION:-us-central1}"
 SERVICE_NAME="${CLOUD_RUN_SERVICE:-webadmon}"
 REPO_NAME="cloud-run-source-deploy"
@@ -75,5 +75,21 @@ yes y | gcloud run deploy "$SERVICE_NAME" \
   --project "$PROJECT_ID" \
   --allow-unauthenticated
 
+SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" \
+  --region="$REGION" \
+  --project="$PROJECT_ID" \
+  --format='value(status.url)' 2>/dev/null || true)
+
 echo ""
-echo "Listo. La URL del servicio se muestra arriba."
+echo "=============================================="
+echo "Listo."
+if [[ -n "$SERVICE_URL" ]]; then
+  echo ""
+  echo "  URL del servicio (ábrela en Chrome):"
+  echo "  $SERVICE_URL"
+  echo ""
+  echo "=============================================="
+else
+  echo "  (La URL también aparece en la salida de gcloud arriba.)"
+  echo "=============================================="
+fi

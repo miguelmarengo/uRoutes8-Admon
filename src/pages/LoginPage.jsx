@@ -124,7 +124,7 @@ export const LoginPage = () => {
           </form>
         </div>
         <p className="text-center text-muted text-xs mt-6">
-          Credenciales en Firebase Auth (proyecto uRoutes8-Admon).
+          Credenciales en Firebase Auth (proyecto uRoutes8).
         </p>
       </div>
     </div>

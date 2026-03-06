@@ -1,7 +1,7 @@
 # Copia este archivo a .env.local (o .claves y carga con tu script)
 # No subas .env.local ni .claves a git
 
-# Firebase (proyecto uRoutes8-Admon)
+# Firebase (proyecto uRoutes8)
 VITE_FIREBASE_API_KEY=
 VITE_FIREBASE_AUTH_DOMAIN=
 VITE_FIREBASE_PROJECT_ID=
