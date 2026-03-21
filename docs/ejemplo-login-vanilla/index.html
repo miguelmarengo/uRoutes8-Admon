@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>uRoutes — Ejemplo login + bodega</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --card: #1a222c;
+      --border: #2d3a47;
+      --text: #e8eef4;
+      --muted: #8b9aab;
+      --accent: #c8e600;
+      --err: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 1.5rem;
+    }
+    .wrap { max-width: 420px; margin: 0 auto; }
+    h1 { font-size: 1.15rem; font-weight: 600; margin: 0 0 0.25rem; }
+    .sub { color: var(--muted); font-size: 0.8rem; margin-bottom: 1.25rem; line-height: 1.4; }
+    section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+    }
+    label { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.35rem; }
+    input[type="text"], input[type="url"] {
+      width: 100%;
+      padding: 0.55rem 0.65rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #121920;
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .row { margin-bottom: 0.75rem; }
+    .row:last-child { margin-bottom: 0; }
+    button {
+      width: 100%;
+      padding: 0.65rem 1rem;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      cursor: pointer;
+      background: var(--accent);
+      color: #111;
+    }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.secondary { background: transparent; color: var(--muted); border: 1px solid var(--border); margin-top: 0.5rem; }
+    .msg { font-size: 0.8rem; margin-top: 0.75rem; padding: 0.5rem 0.65rem; border-radius: 8px; }
+    .msg.err { background: rgba(248,113,113,0.12); color: var(--err); }
+    .msg.ok { background: rgba(200,230,0,0.1); color: var(--accent); }
+    ul.bodegas { list-style: none; padding: 0; margin: 0; }
+    ul.bodegas li { margin-bottom: 0.5rem; }
+    ul.bodegas label {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.5rem 0.6rem; border-radius: 8px; border: 1px solid var(--border);
+      cursor: pointer; font-size: 0.875rem; color: var(--text);
+    }
+    ul.bodegas input { accent-color: var(--accent); }
+    pre {
+      font-size: 0.65rem; overflow: auto; max-height: 140px;
+      background: #121920; padding: 0.5rem; border-radius: 8px; color: var(--muted);
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Login de operador (ejemplo)</h1>
+    <p class="sub">
+      Referencia para otros módulos. Pega la URL de <code>loginCliente</code>, el token de 3 caracteres y comprueba el flujo de bodegas.
+      Puedes abrir este archivo con un servidor estático (<code>npx serve .</code>) si el navegador bloquea CORS desde <code>file://</code>.
+    </p>
+
+    <section id="step-ident">
+      <div class="row">
+        <label for="apiUrl">URL del endpoint (loginCliente)</label>
+        <input type="url" id="apiUrl" placeholder="https://us-central1-PROYECTO.cloudfunctions.net/loginCliente" autocomplete="off" />
+      </div>
+      <div class="row">
+        <label for="empresaCtx">Empresa (contexto, opcional)</label>
+        <input type="text" id="empresaCtx" placeholder="Nombre o código interno" autocomplete="organization" />
+      </div>
+      <div class="row">
+        <label for="usuarioCtx">Usuario / código (opcional)</label>
+        <input type="text" id="usuarioCtx" placeholder="Email o vacío" autocomplete="username" />
+      </div>
+      <div class="row">
+        <label for="token">Token de acceso (3 caracteres)</label>
+        <input type="text" id="token" maxlength="3" class="mono" style="font-family:monospace;letter-spacing:0.2em;text-transform:uppercase" autocomplete="off" />
+      </div>
+      <button type="button" id="btnLogin">Entrar</button>
+      <div id="msgIdent" class="msg hidden"></div>
+    </section>
+
+    <section id="step-bodegas" class="hidden">
+      <p class="sub" style="margin-top:0">Selecciona la bodega con la que trabajarás en esta sesión.</p>
+      <ul class="bodegas" id="listaBodegas"></ul>
+      <button type="button" id="btnContinuar">Continuar</button>
+      <button type="button" id="btnVolver" class="secondary">Volver al login</button>
+      <div id="msgBodega" class="msg hidden"></div>
+    </section>
+
+    <section id="step-done" class="hidden">
+      <p class="sub" style="margin-top:0">Sesión guardada en <code>sessionStorage</code> (solo esta pestaña).</p>
+      <pre id="preview"></pre>
+      <button type="button" id="btnSalir" class="secondary">Cerrar sesión de ejemplo</button>
+    </section>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "uroutes.session.v1";
+
+    const $ = (id) => document.getElementById(id);
+    const normToken = (s) => String(s || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 3);
+
+    function showMsg(el, text, ok) {
+      el.textContent = text;
+      el.className = "msg " + (ok ? "ok" : "err");
+      el.classList.remove("hidden");
+    }
+
+    function hideMsg(el) {
+      el.classList.add("hidden");
+      el.textContent = "";
+    }
+
+    let lastResponse = null;
+
+    $("btnLogin").onclick = async () => {
+      hideMsg($("msgIdent"));
+      const url = $("apiUrl").value.trim();
+      const token = normToken($("token").value);
+      if (!url) {
+        showMsg($("msgIdent"), "Indica la URL del loginCliente.", false);
+        return;
+      }
+      if (token.length !== 3) {
+        showMsg($("msgIdent"), "El token debe tener 3 caracteres.", false);
+        return;
+      }
+      $("btnLogin").disabled = true;
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tokenAcceso: token }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const code = data.code ? ` (${data.code})` : "";
+          showMsg($("msgIdent"), (data.error || res.statusText) + code, false);
+          return;
+        }
+        lastResponse = data;
+        const bodegas = Array.isArray(data.bodegas) ? data.bodegas : [];
+        if (bodegas.length === 0) {
+          showMsg($("msgIdent"), "No hay bodegas asignadas a este usuario.", false);
+          return;
+        }
+        $("step-ident").classList.add("hidden");
+        $("step-bodegas").classList.remove("hidden");
+        const ul = $("listaBodegas");
+        ul.innerHTML = "";
+        bodegas.forEach((b, i) => {
+          const id = b.id || "sin-id";
+          const li = document.createElement("li");
+          li.innerHTML = `
+            <label>
+              <input type="radio" name="bodega" value="${id.replace(/"/g, "&quot;")}" ${i === 0 ? "checked" : ""} />
+              <span>${(b.nombre || id).replace(/</g, "&lt;")}</span>
+            </label>`;
+          ul.appendChild(li);
+        });
+        if (bodegas.length === 1) {
+          hideMsg($("msgBodega"));
+          showMsg($("msgBodega"), "Solo hay una bodega; puedes continuar directamente.", true);
+        }
+      } catch (e) {
+        showMsg($("msgIdent"), "Error de red o CORS: sirve esta carpeta con un servidor HTTP local o revisa la URL.", false);
+      } finally {
+        $("btnLogin").disabled = false;
+      }
+    };
+
+    $("btnContinuar").onclick = () => {
+      hideMsg($("msgBodega"));
+      const sel = document.querySelector('input[name="bodega"]:checked');
+      if (!sel) {
+        showMsg($("msgBodega"), "Elige una bodega.", false);
+        return;
+      }
+      const bodegaActivaId = sel.value;
+      const session = {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        contexto: {
+          empresaTexto: $("empresaCtx").value.trim() || null,
+          usuarioTexto: $("usuarioCtx").value.trim() || null,
+        },
+        usuario: lastResponse.usuario,
+        empresa: lastResponse.empresa,
+        bodegas: lastResponse.bodegas,
+        bodegaActivaId,
+      };
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+      $("step-bodegas").classList.add("hidden");
+      $("step-done").classList.remove("hidden");
+      $("preview").textContent = JSON.stringify(session, null, 2);
+    };
+
+    $("btnVolver").onclick = () => {
+      $("step-bodegas").classList.add("hidden");
+      $("step-ident").classList.remove("hidden");
+      hideMsg($("msgBodega"));
+    };
+
+    $("btnSalir").onclick = () => {
+      sessionStorage.removeItem(STORAGE_KEY);
+      $("step-done").classList.add("hidden");
+      $("step-ident").classList.remove("hidden");
+      lastResponse = null;
+      hideMsg($("msgIdent"));
+    };
+  </script>
+</body>
+</html>

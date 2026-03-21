@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Plus, Pencil, Trash2, X, Loader2, RefreshCw } from "lucide-react";
+import { deleteField } from "firebase/firestore";
 import {
   getEmpresas,
   getUsuarios,
@@ -7,6 +8,7 @@ import {
   updateUsuario,
   deleteUsuario,
 } from "../../lib/firestore";
+import { collectUsuarioBodegaIds } from "../../lib/clienteSesion";
 
 const CHARS_TOKEN = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 const generarTokenAcceso = () => {
@@ -23,7 +25,14 @@ export const TabUsuarios = () => {
   const [filterEmpresaId, setFilterEmpresaId] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState({ nombre: "", email: "", empresaId: "", activo: true, tokenAcceso: "", sheet: "" });
+  const [form, setForm] = useState({
+    nombre: "",
+    email: "",
+    empresaId: "",
+    bodegaIds: [],
+    activo: true,
+    tokenAcceso: "",
+  });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
@@ -64,9 +73,9 @@ export const TabUsuarios = () => {
       nombre: "",
       email: "",
       empresaId: filterEmpresaId || (empresas[0]?.id ?? ""),
+      bodegaIds: [],
       activo: true,
       tokenAcceso: generarTokenAcceso(),
-      sheet: "",
     });
     setModalOpen(true);
   };
@@ -77,9 +86,9 @@ export const TabUsuarios = () => {
       nombre: item.nombre ?? "",
       email: item.email ?? "",
       empresaId: item.empresaId ?? "",
+      bodegaIds: collectUsuarioBodegaIds(item),
       activo: item.activo !== false,
       tokenAcceso: item.tokenAcceso ?? "",
-      sheet: item.sheet ?? "",
     });
     setModalOpen(true);
   };
@@ -87,12 +96,23 @@ export const TabUsuarios = () => {
   const closeModal = () => {
     setModalOpen(false);
     setEditingId(null);
-    setForm({ nombre: "", email: "", empresaId: "", activo: true, tokenAcceso: "", sheet: "" });
+    setForm({ nombre: "", email: "", empresaId: "", bodegaIds: [], activo: true, tokenAcceso: "" });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.nombre?.trim()) return;
+    const bod = bodegasDeEmpresaSeleccionada();
+    const idsSet = new Set(bod.map((b) => b.id).filter(Boolean));
+    const bodegaIdsLimpios = [...new Set((form.bodegaIds || []).filter((id) => idsSet.has(id)))];
+    if (form.empresaId && bod.length > 0 && bodegaIdsLimpios.length === 0) {
+      setError("Selecciona al menos una bodega: el usuario solo verá datos de las bodegas que marques.");
+      return;
+    }
+    if (bodegaIdsLimpios.length !== (form.bodegaIds || []).length) {
+      setError("Alguna bodega marcada no pertenece a la empresa. Revisa la selección.");
+      return;
+    }
     setSaving(true);
     try {
       const tokenVal = (form.tokenAcceso || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 3);
@@ -100,9 +120,10 @@ export const TabUsuarios = () => {
         nombre: form.nombre.trim(),
         email: form.email?.trim() || null,
         empresaId: form.empresaId || null,
+        bodegaIds: form.empresaId ? bodegaIdsLimpios : [],
         activo: !!form.activo,
-        sheet: form.sheet?.trim() || null,
         ...(tokenVal.length === 3 && { tokenAcceso: tokenVal }),
+        ...(editingId ? { sheet: deleteField(), bodegaId: deleteField() } : {}),
       };
       if (editingId) {
         await updateUsuario(editingId, payload);
@@ -135,6 +156,40 @@ export const TabUsuarios = () => {
     if (!id) return "—";
     const e = empresas.find((x) => x.id === id);
     return e?.nombre ?? id;
+  };
+
+  const etiquetaBodegasAcceso = (item) => {
+    const ids = collectUsuarioBodegaIds(item);
+    if (ids.length === 0) return "—";
+    const e = empresas.find((x) => x.id === item.empresaId);
+    const names = ids.map((id) => {
+      const b = Array.isArray(e?.bodegas) ? e.bodegas.find((x) => x.id === id) : null;
+      return b?.nombre?.trim() || id;
+    });
+    return names.join(", ");
+  };
+
+  const bodegasDeEmpresaSeleccionada = () => {
+    const e = empresas.find((x) => x.id === form.empresaId);
+    return Array.isArray(e?.bodegas) ? e.bodegas : [];
+  };
+
+  const toggleBodegaEnForm = (bodegaId, checked) => {
+    setForm((f) => {
+      const cur = new Set(f.bodegaIds || []);
+      if (checked) cur.add(bodegaId);
+      else cur.delete(bodegaId);
+      return { ...f, bodegaIds: [...cur] };
+    });
+  };
+
+  const seleccionarTodasBodegasForm = () => {
+    const all = bodegasDeEmpresaSeleccionada().map((b) => b.id).filter(Boolean);
+    setForm((f) => ({ ...f, bodegaIds: all }));
+  };
+
+  const limpiarBodegasForm = () => {
+    setForm((f) => ({ ...f, bodegaIds: [] }));
   };
 
   return (
@@ -190,7 +245,7 @@ export const TabUsuarios = () => {
                 <th className="px-4 py-3 font-medium">Nombre</th>
                 <th className="px-4 py-3 font-medium">Email</th>
                 <th className="px-4 py-3 font-medium">Empresa</th>
-                <th className="px-4 py-3 font-medium">Sheet</th>
+                <th className="px-4 py-3 font-medium">Bodegas con acceso</th>
                 <th className="px-4 py-3 font-medium w-20 text-center">Activo</th>
                 <th className="px-4 py-3 font-medium w-28 text-right">Acciones</th>
               </tr>
@@ -201,7 +256,9 @@ export const TabUsuarios = () => {
                   <td className="px-4 py-3">{item.nombre || "—"}</td>
                   <td className="px-4 py-3 text-muted">{item.email || "—"}</td>
                   <td className="px-4 py-3 text-muted">{getEmpresaNombre(item.empresaId)}</td>
-                  <td className="px-4 py-3 text-muted max-w-[180px] truncate" title={item.sheet || ""}>{item.sheet || "—"}</td>
+                  <td className="px-4 py-3 text-muted max-w-[220px] truncate" title={etiquetaBodegasAcceso(item)}>
+                    {etiquetaBodegasAcceso(item)}
+                  </td>
                   <td className="px-4 py-3 text-center">
                     {item.activo !== false ? (
                       <span className="text-primary font-medium">Sí</span>
@@ -286,7 +343,17 @@ export const TabUsuarios = () => {
                 <label className="block text-sm text-muted mb-1">Empresa</label>
                 <select
                   value={form.empresaId}
-                  onChange={(e) => setForm((f) => ({ ...f, empresaId: e.target.value }))}
+                  onChange={(e) => {
+                    const nextEmpresaId = e.target.value;
+                    setForm((f) => {
+                      const bod = empresas.find((x) => x.id === nextEmpresaId);
+                      const valid = new Set(
+                        Array.isArray(bod?.bodegas) ? bod.bodegas.map((b) => b.id).filter(Boolean) : []
+                      );
+                      const nextIds = (f.bodegaIds || []).filter((id) => valid.has(id));
+                      return { ...f, empresaId: nextEmpresaId, bodegaIds: nextIds };
+                    });
+                  }}
                   className="w-full px-4 py-2 rounded-lg bg-surface-200 border border-border text-white focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="">Sin empresa</option>
@@ -298,15 +365,60 @@ export const TabUsuarios = () => {
                 </select>
               </div>
               <div>
-                <label className="block text-sm text-muted mb-1">Sheet (hoja de cálculo con acceso)</label>
-                <input
-                  type="text"
-                  value={form.sheet}
-                  onChange={(e) => setForm((f) => ({ ...f, sheet: e.target.value }))}
-                  className="w-full px-4 py-2 rounded-lg bg-surface-200 border border-border text-white placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="ID o URL de la hoja de Google Sheets a la que tiene acceso"
-                />
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                  <label className="block text-sm text-muted">¿A qué bodegas tiene acceso?</label>
+                  {form.empresaId && bodegasDeEmpresaSeleccionada().length > 0 && (
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={seleccionarTodasBodegasForm}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Marcar todas
+                      </button>
+                      <span className="text-muted text-xs">·</span>
+                      <button type="button" onClick={limpiarBodegasForm} className="text-xs text-muted hover:text-white">
+                        Quitar todas
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {!form.empresaId ? (
+                  <p className="text-xs text-muted rounded-lg border border-border/60 bg-surface-200/30 px-3 py-2">
+                    Primero elige empresa; luego podrás marcar las bodegas (definidas en la ficha de la empresa).
+                  </p>
+                ) : bodegasDeEmpresaSeleccionada().length === 0 ? (
+                  <p className="text-xs text-amber-200/90 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+                    Esta empresa aún no tiene bodegas dadas de alta. Créalas en Empresas; aquí no habrá qué asignar.
+                  </p>
+                ) : (
+                  <ul className="rounded-lg border border-border bg-surface-200/40 divide-y divide-border max-h-48 overflow-y-auto">
+                    {bodegasDeEmpresaSeleccionada().map((b) => {
+                      const checked = (form.bodegaIds || []).includes(b.id);
+                      return (
+                        <li key={b.id}>
+                          <label className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-surface-200/80">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => toggleBodegaEnForm(b.id, e.target.checked)}
+                              className="w-4 h-4 rounded border-border bg-surface-200 text-primary focus:ring-primary shrink-0"
+                            />
+                            <span className="text-sm text-white">{b.nombre?.trim() || b.id}</span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <p className="text-xs text-muted mt-2 leading-relaxed">
+                  Solo verá dashboards y datos de las bodegas marcadas. El login devuelve ese subconjunto en{" "}
+                  <code className="text-primary/90">bodegas</code> e <code className="text-primary/90">usuario.bodegaIds</code>.
+                </p>
               </div>
+              <p className="text-xs text-muted rounded-lg bg-surface-200/50 border border-border/60 px-3 py-2">
+                La hoja de Google Sheet se asigna por bodega en la ficha de la empresa, no por usuario.
+              </p>
               <div>
                 <label className="block text-sm text-muted mb-1">
                   Token de acceso (contraseña de 3 caracteres para entrar a los sistemas)

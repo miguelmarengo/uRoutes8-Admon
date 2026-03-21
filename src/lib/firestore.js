@@ -1,6 +1,7 @@
 import {
   collection,
   getDocs,
+  getDoc,
   addDoc,
   updateDoc,
   deleteDoc,
@@ -11,7 +12,19 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db, auth } from "../../config/firebase";
+import { buildClienteLoginResponse } from "./clienteSesion";
 
+/**
+ * Empresas (`empresas/{id}`): campo opcional `bodegas` (array de objetos).
+ * Cada bodega debe incluir `id` estable, datos de ubicación/contacto y `googleSheet`
+ * (ID o URL del spreadsheet). Los módulos que autentiquen por `usuarios.tokenAcceso`
+ * deben cargar el usuario, su `empresaId` y la empresa con `bodegas` para exponer
+ * la hoja correcta por bodega (el campo `sheet` en `usuarios` queda obsoleto).
+ *
+ * Usuarios (`usuarios/{id}`): `bodegaIds` (array de ids de `empresas.bodegas[]`) =
+ * únicas bodegas que verá en dashboards. Si la empresa tiene bodegas, debe elegirse
+ * al menos una. Legado: `bodegaId` (único) sigue leyéndose en login hasta migrar.
+ */
 const COL_EMPRESAS = "empresas";
 const COL_USUARIOS = "usuarios";
 const COL_BITACORA = "bitacora";
@@ -21,6 +34,56 @@ export const getEmpresas = async () => {
     query(collection(db, COL_EMPRESAS), orderBy("nombre"))
   );
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+export const getEmpresaById = async (id) => {
+  if (!id) return null;
+  const s = await getDoc(doc(db, COL_EMPRESAS, id));
+  if (!s.exists()) return null;
+  return { id: s.id, ...s.data() };
+};
+
+/** Normaliza token a 3 caracteres alfanuméricos (misma lógica que el panel). */
+const normalizeTokenAcceso = (tokenRaw) =>
+  String(tokenRaw ?? "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 3);
+
+/**
+ * Busca usuarios por token (puede haber más de uno si hay datos duplicados).
+ * Requiere sesión según reglas de Firestore (p. ej. solo admin en este proyecto).
+ */
+export const getUsuariosByTokenAcceso = async (tokenRaw) => {
+  const token = normalizeTokenAcceso(tokenRaw);
+  if (token.length !== 3) return [];
+  const snap = await getDocs(
+    query(collection(db, COL_USUARIOS), where("tokenAcceso", "==", token))
+  );
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+};
+
+/**
+ * Resuelve usuario + empresa y devuelve el mismo JSON que debe exponer la Cloud Function `loginCliente`.
+ * Útil para pruebas desde el admin (con sesión). Las apps de campo deben llamar a la función HTTP.
+ */
+export const resolveClienteSesionPorTokenAcceso = async (tokenRaw) => {
+  const matches = await getUsuariosByTokenAcceso(tokenRaw);
+  if (matches.length === 0) {
+    const err = new Error("Token no válido");
+    err.code = "AUTH_TOKEN_INVALID";
+    throw err;
+  }
+  const usuario = matches[0];
+  if (usuario.activo === false) {
+    const err = new Error("Usuario inactivo");
+    err.code = "AUTH_USER_INACTIVE";
+    throw err;
+  }
+  if (!usuario.empresaId) {
+    return buildClienteLoginResponse(usuario, null);
+  }
+  const empresa = await getEmpresaById(usuario.empresaId);
+  return buildClienteLoginResponse(usuario, empresa);
 };
 
 const sanitizeForFirestore = (obj) => {
