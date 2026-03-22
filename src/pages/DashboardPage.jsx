@@ -30,7 +30,7 @@ export const DashboardPage = () => {
         <h1 className="text-lg font-semibold text-white">uRoutes Admin</h1>
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted truncate max-w-[180px]">
-            {user?.email}
+            {user?.displayName ?? user?.email ?? "—"}
           </span>
           <button
             type="button"

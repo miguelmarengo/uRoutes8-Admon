@@ -5,61 +5,59 @@ Panel de administración para gestionar empresas, usuarios y bitácoras (proyect
 ## Requisitos
 
 - Node 18+
-- Proyecto Firebase **uRoutes8** con Auth (Email/Password) y Firestore activados.
+- Proyecto Firebase **uRoutes8** (o el que uses para Admon) con Firestore activo.
 
 ## Configuración
 
-1. Clona o abre el proyecto y instala dependencias:
+1. Instalación:
 
    ```bash
    cd webAdmon
    npm install
    ```
 
-2. Crea el usuario admin en Firebase Console (Authentication → Email/Password):
-   - Email: p. ej. `mm@uroutes-admin.local`
-   - Contraseña: `mm` (o la que uses para login universal).
+2. Variables de entorno: copia **`.env.local.example`** → **`.env.local`** y rellena las `VITE_FIREBASE_*` con los **mismos valores** que en `webOptimizador/.env.local` (mismo proyecto Admon). También puedes partir de `.claves.example`.
 
-3. Variables de entorno: copia `.claves.example` a `.env.local` y rellena con la config de Firebase (Configuración del proyecto → Tus apps → SDK):
+3. **Login del panel:** primero usuario/contraseña en `src/lib/admonHardcodedAuth.js` (gaby/maria/mm). Después el cliente inicia sesión en **Firebase Auth** con `VITE_FIREBASE_PANEL_EMAIL` y `VITE_FIREBASE_PANEL_PASSWORD` (crea ese usuario en Firebase Console → Authentication → Email/Password). Sin esto, Firestore responde *Missing or insufficient permissions* porque las reglas exigen `request.auth != null`.
 
-   ```
-   VITE_FIREBASE_API_KEY=...
-   VITE_FIREBASE_AUTH_DOMAIN=...
-   VITE_FIREBASE_PROJECT_ID=...
-   VITE_FIREBASE_STORAGE_BUCKET=...
-   VITE_FIREBASE_MESSAGING_SENDER_ID=...
-   VITE_FIREBASE_APP_ID=...
-   ```
+4. **Reglas de Firestore (obligatorio):** en Firebase Console → Firestore → **Reglas**, publica el contenido de `firestore.rules` de este repo.
 
-4. **Reglas de Firestore (obligatorio para que guardar funcione):** En Firebase Console del proyecto uRoutes8 → Firestore Database → pestaña **Reglas**, pega el contenido del archivo `firestore.rules` de este repo y pulsa **Publicar**. Sin esto, las escrituras fallan o se quedan colgadas.
-
-5. Arranca en desarrollo:
+5. Desarrollo:
 
    ```bash
    npm run dev
    ```
 
-6. Build para producción: `npm run build`. La salida queda en `dist/`.
+6. Build producción: `npm run build` → salida en `dist/`.
 
-## Estructura relevante
+## Deploy a Cloud Run (como webOptimizador)
 
-- `config/firebase.js`: inicialización de Firebase.
-- `src/context/AuthContext.jsx`: estado global de autenticación.
-- `src/pages/LoginPage.jsx`, `DashboardPage.jsx`: login y layout con tabs.
-- `src/components/tabs/`: TabEmpresas, TabUsuarios, TabBitacora, TabEstadisticas.
-- `src/lib/firestore.js`: helpers para colecciones `empresas`, `usuarios`, `bitacora`.
+Guía detallada: **[docs/DEPLOY_WEBADMON.md](docs/DEPLOY_WEBADMON.md)**
 
-## Deploy a Cloud Run
+Resumen:
 
 ```bash
+cp .env.local.example .env.local    # y rellena VITE_* (iguales que Optimizador)
+# opcional: cp .env.deploy.example .env.deploy
+./scripts/verificar_pre_deploy.sh
 ./deploy.sh
 ```
 
-Requisitos: [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) instalado y `gcloud login` hecho. El script usa el proyecto por defecto `uroutes8` y la región `us-central1`; puedes sobreescribir con `GCP_PROJECT_ID`, `GCP_REGION` y `CLOUD_RUN_SERVICE`.
+- Sin prompts de gcloud (`CLOUDSDK_CORE_DISABLE_PROMPTS`).
+- Habilita Artifact Registry, Cloud Run y Cloud Build.
+- **Docker** en marcha → build local; si no → **Cloud Build** (`cloudbuild.yaml` con tus `VITE_*`).
 
-Si tienes `.env.local`, las variables `VITE_*` se pasan al build en Cloud Run para que Firebase quede configurado en la app desplegada.
+Variables útiles: `GCP_PROJECT_ID` o `cloudProject`, `GCP_REGION`, `CLOUD_RUN_SERVICE` o `serviceName` (en `.env.deploy` o entorno). Ver `.env.deploy.example`.
+
+## Estructura relevante
+
+- `config/firebase.js`: Firebase (Firestore) para el panel.
+- `src/context/AuthContext.jsx`: sesión del panel (hardcoded / `sessionStorage`).
+- `src/pages/LoginPage.jsx`, `DashboardPage.jsx`: login y layout con tabs.
+- `src/components/tabs/`: TabEmpresas, TabUsuarios, TabBitácora, TabEstadísticas.
+- `src/lib/firestore.js`: colecciones `empresas`, `usuarios`, `bitácora`.
 
 ## Rutas
 
 - `/login`: pantalla de login.
-- `/`: dashboard (protegido; redirige a `/login` si no hay sesión).
+- `/`: dashboard (protegido).

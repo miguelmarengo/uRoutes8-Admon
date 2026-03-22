@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useLocation, Navigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -7,15 +7,14 @@ import { LogIn, AlertCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 const loginSchema = z.object({
-  email: z.string().min(1, "El correo es obligatorio").email("Correo no válido"),
+  username: z.string().min(1, "El usuario es obligatorio"),
   password: z.string().min(1, "La contraseña es obligatoria"),
 });
 
 export const LoginPage = () => {
-  const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
-  const [firebaseError, setFirebaseError] = useState(null);
+  const { login, user, loading, sessionReady } = useAuth();
+  const [authError, setAuthError] = useState(null);
 
   const {
     register,
@@ -23,26 +22,36 @@ export const LoginPage = () => {
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { username: "", password: "" },
   });
 
   const from = location.state?.from?.pathname ?? "/";
 
   const onSubmit = async (data) => {
-    setFirebaseError(null);
+    setAuthError(null);
     try {
-      await login(data.email, data.password);
-      navigate(from, { replace: true });
+      await login(data.username, data.password);
     } catch (err) {
-      const message =
-        err.code === "auth/invalid-credential"
-          ? "Correo o contraseña incorrectos."
-          : err.code === "auth/too-many-requests"
-            ? "Demasiados intentos. Intenta más tarde."
-            : err.message || "Error al iniciar sesión.";
-      setFirebaseError(message);
+      setAuthError(err.message || "Error al iniciar sesión.");
     }
   };
+
+  if (loading || (user && !sessionReady)) {
+    return (
+      <div className="min-h-screen bg-surface-900 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          {user && !sessionReady && (
+            <p className="text-muted text-sm">Conectando con Firebase…</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (user && sessionReady) {
+    return <Navigate to={from} replace />;
+  }
 
   return (
     <div className="min-h-screen bg-surface-900 flex items-center justify-center p-4 font-sans">
@@ -57,31 +66,32 @@ export const LoginPage = () => {
             </p>
           </div>
 
-          {firebaseError && (
+          {authError && (
             <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/30 flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-              <p className="text-sm text-red-200">{firebaseError}</p>
+              <p className="text-sm text-red-200">{authError}</p>
             </div>
           )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div>
               <label
-                htmlFor="email"
+                htmlFor="username"
                 className="block text-sm font-medium text-gray-300 mb-1.5"
               >
-                Correo
+                Usuario
               </label>
               <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                placeholder="ej. admin@uroutes.local"
+                id="username"
+                type="text"
+                autoComplete="username"
                 className="w-full px-4 py-2.5 rounded-lg bg-surface-50 border border-border-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
-                {...register("email")}
+                {...register("username")}
               />
-              {errors.email && (
-                <p className="mt-1 text-sm text-red-400">{errors.email.message}</p>
+              {errors.username && (
+                <p className="mt-1 text-sm text-red-400">
+                  {errors.username.message}
+                </p>
               )}
             </div>
 
@@ -96,7 +106,7 @@ export const LoginPage = () => {
                 id="password"
                 type="password"
                 autoComplete="current-password"
-                placeholder="••••••••"
+                placeholder="••••••"
                 className="w-full px-4 py-2.5 rounded-lg bg-surface-50 border border-border-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition"
                 {...register("password")}
               />
@@ -124,7 +134,7 @@ export const LoginPage = () => {
           </form>
         </div>
         <p className="text-center text-muted text-xs mt-6">
-          Credenciales en Firebase Auth (proyecto uRoutes8).
+          Acceso restringido. Cierra sesión al terminar.
         </p>
       </div>
     </div>

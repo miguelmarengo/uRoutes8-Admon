@@ -1,0 +1,8 @@
+# Contexto enviado a Cloud Build (mantener pequeño)
+.gcloudignore
+.git
+node_modules
+dist
+*.log
+.DS_Store
+.cursor
