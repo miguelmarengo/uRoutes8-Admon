@@ -2,6 +2,7 @@ import { onRequest } from "firebase-functions/v2/https";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { buildClienteLoginResponse } from "./loginPayload.js";
+import { findUsuarioSnapshotByToken } from "./tokenLookup.js";
 
 initializeApp();
 const db = getFirestore();
@@ -29,8 +30,8 @@ export const loginCliente = onRequest(
     }
 
     try {
-      const snap = await db.collection("usuarios").where("tokenAcceso", "==", token).limit(2).get();
-      if (snap.empty) {
+      const snap = await findUsuarioSnapshotByToken(db, token);
+      if (!snap || snap.empty) {
         res.status(401).json({ code: "AUTH_TOKEN_INVALID", error: "Token no válido" });
         return;
       }

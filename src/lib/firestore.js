@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import { db, auth } from "../../config/firebase";
 import { buildClienteLoginResponse } from "./clienteSesion";
+import { TOKEN_FIELDS_FIRESTORE, normalizarTokenAcceso } from "./usuarioToken";
 
 /**
  * Empresas (`empresas/{id}`): campo opcional `bodegas` (array de objetos).
@@ -22,8 +23,9 @@ import { buildClienteLoginResponse } from "./clienteSesion";
  * la hoja correcta por bodega (el campo `sheet` en `usuarios` queda obsoleto).
  *
  * Usuarios (`usuarios/{id}`): `bodegaIds` (array de ids de `empresas.bodegas[]`) =
- * únicas bodegas que verá en dashboards. Si la empresa tiene bodegas, debe elegirse
- * al menos una. Legado: `bodegaId` (único) sigue leyéndose en login hasta migrar.
+ * únicas bodegas que verá en dashboards. `tokenAcceso` (3 caracteres) es el login;
+ * el panel y loginCliente también leen legado: `password`, `token`, `codigoAcceso`, `codigo`.
+ * Al guardar desde el admin se normaliza a `tokenAcceso`. Legado: `bodegaId` en lectura de bodegas.
  */
 const COL_EMPRESAS = "empresas";
 const COL_USUARIOS = "usuarios";
@@ -43,23 +45,23 @@ export const getEmpresaById = async (id) => {
   return { id: s.id, ...s.data() };
 };
 
-/** Normaliza token a 3 caracteres alfanuméricos (misma lógica que el panel). */
-const normalizeTokenAcceso = (tokenRaw) =>
-  String(tokenRaw ?? "")
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .slice(0, 3);
-
 /**
- * Busca usuarios por token (puede haber más de uno si hay datos duplicados).
+ * Busca usuarios por token en `tokenAcceso` y campos legados (`password`, `token`, etc.).
  * Requiere sesión según reglas de Firestore (p. ej. solo admin en este proyecto).
  */
 export const getUsuariosByTokenAcceso = async (tokenRaw) => {
-  const token = normalizeTokenAcceso(tokenRaw);
+  const token = normalizarTokenAcceso(tokenRaw);
   if (token.length !== 3) return [];
-  const snap = await getDocs(
-    query(collection(db, COL_USUARIOS), where("tokenAcceso", "==", token))
-  );
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const byId = new Map();
+  for (const field of TOKEN_FIELDS_FIRESTORE) {
+    const snap = await getDocs(
+      query(collection(db, COL_USUARIOS), where(field, "==", token))
+    );
+    for (const d of snap.docs) {
+      if (!byId.has(d.id)) byId.set(d.id, { id: d.id, ...d.data() });
+    }
+  }
+  return [...byId.values()];
 };
 
 /**

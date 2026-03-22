@@ -1,7 +1,7 @@
 # Login unificado entre módulos (empresa / usuario / bodega)
 
 **Archivo:** `docs/LOGIN_UNIFICADO_MODULOS.md`  
-**Última revisión:** 2026-03-22
+**Última revisión:** 2026-03-21
 
 Referencia única para que los programas que den acceso a operadores (web, scripts, etc.) se comporten **igual**. La **app Kotlin** puede usar UI distinta, pero conviene el **mismo contrato HTTP y JSON** descrito aquí.
 
@@ -19,7 +19,8 @@ Referencia única para que los programas que den acceso a operadores (web, scrip
 8. [Ubicación en el repo](#8-dónde-está-implementado-en-este-repo)  
 9. [Resumen](#9-resumen-en-una-frase)  
 10. [Ejemplo HTML, tipos TS, sesión, seguridad](#10-continuación-ejemplo-listo-tipos-y-sesión)  
-11. [Ejecutar el login, guardar sesión y leer Sheet / Firestore](#11-ejecutar-el-login-guardar-sesión-y-leer-sheet--firestore)
+11. [Ejecutar el login, guardar sesión y leer Sheet / Firestore](#11-ejecutar-el-login-guardar-sesión-y-leer-sheet--firestore)  
+12. [Cómo aplicar esto en cada módulo](#12-cómo-aplicar-esto-en-cada-módulo)
 
 ---
 
@@ -33,8 +34,10 @@ Referencia única para que los programas que den acceso a operadores (web, scrip
 
 Reglas de negocio:
 
-- En el **panel**, si la empresa tiene bodegas, cada usuario debe tener **al menos una** bodega marcada en `bodegaIds`; eso define **a qué puede acceder**.
-- El **login HTTP** devuelve solo ese subconjunto en `bodegas` (no todas las de la empresa).
+- En el **panel**, si la empresa tiene bodegas, cada usuario debe tener **al menos una** bodega marcada en `bodegaIds`; eso define **a qué puede acceder** (si marcas las cuatro, el login trae **cuatro**; si solo una, trae **una**).
+- El **login HTTP** (`loginCliente`) y **webOptimizador** solo envían en **`bodegas`** las bodegas **asignadas a ese usuario** (intersección con el catálogo de la empresa). **No** se envía el listado completo de la empresa al cliente.
+- Si el usuario **no** tiene `bodegaIds` (ni `bodegaId` legado) y la empresa **sí** tiene bodegas en Firestore, el login **no es válido** (Optimizador: no matchea usuario; `loginCliente`: `bodegas` vacío).
+- Si la empresa tiene **`googleMapsApiKey`** en Firestore, el JSON de `loginCliente` puede incluir **`empresa.googleMapsApiKey`** (clave de navegador; sin `firebaseConfig` ni service accounts).
 - Tras login, el operador elige **`bodegaActivaId`** para la sesión (trabajo y dashboards).
 - **Legado:** si en Firestore aún existe `bodegaId` (un solo id) y no hay `bodegaIds`, el servidor lo sigue interpretando hasta migrar el documento.
 
@@ -65,11 +68,11 @@ Al enviar: **POST** al endpoint (§4). Hoy el backend resuelve al usuario **solo
 Persistir (memoria, `sessionStorage`, `localStorage` o store del framework):
 
 - Objeto **`usuario`** (campos públicos de la respuesta)
-- **`empresa`** (`id`, `nombre`)
-- **`bodegas`** (copia de la lista autorizada)
-- **`bodegaActivaId`** (elegida por el operador)
+- **`empresa`** (`id`, `nombre`, opcional `googleMapsApiKey`)
+- **`bodegas`** (solo las que el usuario tiene asignadas)
+- **`bodegaActivaId`** (elegida por el operador entre esas `bodegas`)
 
-Toda vista que use hoja Google o datos por centro debe filtrar por **`bodegaActivaId`** y comprobar que ese `id` siga presente en `bodegas`.
+Toda vista que use hoja Google o datos por centro debe filtrar por **`bodegaActivaId`** y comprobar que ese `id` siga en **`bodegas`** devueltas por el login.
 
 ---
 
@@ -82,17 +85,20 @@ Toda vista que use hoja Google o datos por centro debe filtrar por **`bodegaActi
 
 ### 3.2 `empresa`
 
-- `id`, `nombre` únicamente (sin credenciales ni `firebaseConfig`).
+- `id`, `nombre`.
+- Opcional: **`googleMapsApiKey`** si está definida en el documento empresa (no se envían `firebaseConfig`, service accounts ni SMTP).
 
 ### 3.3 `bodegas`
 
-- Array **filtrado**: solo bodegas a las que el usuario tiene acceso.
+- **Solo** bodegas que el usuario tiene asignadas en Firestore (`bodegaIds` o legado `bodegaId`), cruzadas con las que existen en `empresas/{id}.bodegas`.
+- La comparación de **`id`** es **case-insensitive** (UUID en mayúsculas/minúsculas).
 - Cada ítem incluye al menos `id`, `nombre`, `googleSheet`; el panel puede guardar más campos (dirección, contactos, etc.).
 
 ### 3.4 Casos límite
 
 - **Usuario sin `empresaId`:** `empresa` será `null` y `bodegas` suele ir vacío.
-- **Compatibilidad:** `bodegaSeleccionada` y `googleSheet` en la raíz reflejan la **primera** entrada de `bodegas` (orden del array en servidor). **No** sustituyen a la elección explícita de `bodegaActivaId`.
+- **Empresa con bodegas pero usuario sin asignar ninguna:** `bodegas` vacío; en Optimizador el login con Admon **falla** hasta asignar bodegas en el panel.
+- **Compatibilidad:** `bodegaSeleccionada` y `googleSheet` en la raíz reflejan la **primera** entrada de `bodegas`. **No** sustituyen a **`bodegaActivaId`**.
 
 ### 3.5 Ejemplo JSON
 
@@ -106,7 +112,11 @@ Toda vista que use hoja Google o datos por centro debe filtrar por **`bodegaActi
     "bodegaIds": ["b1", "b2"],
     "activo": true
   },
-  "empresa": { "id": "empX", "nombre": "Llano de la Torre" },
+  "empresa": {
+    "id": "empX",
+    "nombre": "Llano de la Torre",
+    "googleMapsApiKey": "AIza..."
+  },
   "bodegas": [
     { "id": "b1", "nombre": "Bodega Norte", "googleSheet": "https://docs.google.com/..." },
     { "id": "b2", "nombre": "Bodega Sur", "googleSheet": "..." }
@@ -127,6 +137,8 @@ Toda vista que use hoja Google o datos por centro debe filtrar por **`bodegaActi
 | Cuerpo | `{ "tokenAcceso": "aB1" }` (también se acepta la propiedad `token`) |
 | Región (este repo) | `us-central1` |
 | CORS | Habilitado en la función |
+
+En Firestore el valor puede estar en **`tokenAcceso`** (recomendado) o en campos antiguos: **`password`**, **`token`**, **`codigoAcceso`**, **`codigo`**. La función busca en todos en ese orden. El token enviado en el POST debe tener **exactamente 3** caracteres alfanuméricos (si un usuario tenía solo 2, hay que ampliarlo en el panel y guardar).
 
 **URL típica tras desplegar:**
 
@@ -199,7 +211,7 @@ Cualquier cambio en el JSON debe reflejarse **en `clienteSesion.js` y en `functi
 
 ## 9. Resumen en una frase
 
-**Mismo `POST`, mismo JSON: tras autenticar, el operador elige una bodega entre `bodegas` y el módulo trabaja con `bodegaActivaId`.**
+**Mismo criterio en todos los módulos: `bodegas` en la respuesta son solo las asignadas al usuario; el operador elige `bodegaActivaId` entre ellas.**
 
 Si más adelante el servidor valida “empresa + usuario + token”, se amplía el body del `POST`; la selección de bodega **sigue igual**.
 
@@ -367,9 +379,18 @@ El login **no** devuelve un “sheet id” suelto fiable para todas las apps: lo
 **Paso 1 — Resolver la bodega activa:**
 
 ```javascript
+function normId(s) {
+  return String(s ?? "")
+    .trim()
+    .toLowerCase();
+}
+
 function getBodegaActiva(sesion) {
   if (!sesion?.bodegas || !sesion.bodegaActivaId) return null;
-  return sesion.bodegas.find((b) => b.id === sesion.bodegaActivaId) ?? null;
+  const want = normId(sesion.bodegaActivaId);
+  return (
+    sesion.bodegas.find((b) => normId(b.id) === want) ?? null
+  );
 }
 ```
 
@@ -403,6 +424,7 @@ const sheetIdParaApi = extraerSpreadsheetId(b?.googleSheet);
 |-----------|---------------------|---------------------------|
 | **ID de empresa** (`empresaId`) | Sí, en `usuario.empresaId` | Guardarlo en sesión para filtrar datos o rutas. |
 | **Google Sheet de la bodega** | Sí, en `bodegas[].googleSheet` | §11.4. |
+| **Google Maps (clave navegador)** | Opcional, en `empresa.googleMapsApiKey` si está en Firestore | Restringir por referrer en Google Cloud; no es un secreto de servidor. |
 | **Inicializar Firebase (Firestore) en la app del operador** | No | Ver filas de abajo. |
 
 **Patrones habituales para Firestore en apps de campo:**
@@ -421,3 +443,31 @@ Pseudo-flujo al cargar cualquier página interna:
 2. Si `!sesion` → pantalla de login.  
 3. Si `!getBodegaActiva(sesion)` → forzar selector de bodega o login de nuevo.  
 4. Si todo OK → montar dashboard usando `sheetId` §11.4 y filtros §11.5.
+
+---
+
+## 12. Cómo aplicar esto en cada módulo
+
+Usa la **misma regla mental** en todos: lo que el servidor pone en **`bodegas`** es **exactamente** lo que el usuario puede usar (ni más ni menos). No inventes listas de bodegas aparte del login salvo que leas Firestore con reglas admin (no es el caso del operador).
+
+| Módulo | Mecanismo de sesión | Qué leer para bodegas | Qué leer para Maps (si aplica) |
+|--------|---------------------|----------------------|--------------------------------|
+| **Apps con `loginCliente`** (POST token) | JSON de la Cloud Function + tu `sessionStorage` / store | `response.bodegas` | `response.empresa?.googleMapsApiKey` |
+| **webOptimizador** | Cookie `access_token` (JWT) + `GET /api/me` | `data.bodegas` y `data.sheets` (el listbox de hojas sale de `bodegas` con `sheet_id`) | `data.googleMapsApiKey` o `GET /api/config` |
+| **Kotlin / nativo** | Igual que fila 1: POST y parsear JSON | `bodegas` | `empresa.googleMapsApiKey` opcional |
+
+**Checklist rápido al integrar un módulo nuevo**
+
+1. Tras autenticar, si `bodegas.length === 0` → no entrar al dashboard (mensaje: asignar bodegas en Admon).
+2. `bodegaActivaId` debe ser siempre uno de los `id` de `bodegas` devueltas.
+3. No mostrar bodegas de la empresa que no vengan en `bodegas` (el operador no debe ver centros a los que no tiene acceso).
+4. Mantener alineados `src/lib/clienteSesion.js` y `functions/loginPayload.js` si tocáis el shape del JSON en webAdmon.
+
+**Referencia de código (este monorepo)**
+
+| Módulo | Archivos |
+|--------|----------|
+| JSON `loginCliente` | `webAdmon/functions/loginPayload.js`, `webAdmon/src/lib/clienteSesion.js` |
+| Optimizador login Firestore | `webOptimizador/app/admon_login.py` |
+| JWT + `/api/me` | `webOptimizador/app/main.py` (`bodegas` en payload, `google_maps_api_key`) |
+| Tipos TS copiables | `webAdmon/docs/login-response.types.ts` |

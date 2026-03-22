@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Pencil, Trash2, X, Loader2, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Loader2, RefreshCw, Eye, EyeOff } from "lucide-react";
 import { deleteField } from "firebase/firestore";
 import {
   getEmpresas,
@@ -9,6 +9,7 @@ import {
   deleteUsuario,
 } from "../../lib/firestore";
 import { collectUsuarioBodegaIds } from "../../lib/clienteSesion";
+import { leerTokenDesdeUsuario, normalizarTokenAcceso } from "../../lib/usuarioToken";
 
 const CHARS_TOKEN = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 const generarTokenAcceso = () => {
@@ -35,6 +36,7 @@ export const TabUsuarios = () => {
   });
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [mostrarToken, setMostrarToken] = useState(false);
 
   const loadEmpresas = async () => {
     try {
@@ -68,6 +70,7 @@ export const TabUsuarios = () => {
   }, [filterEmpresaId]);
 
   const openCreate = () => {
+    setError(null);
     setEditingId(null);
     setForm({
       nombre: "",
@@ -77,10 +80,12 @@ export const TabUsuarios = () => {
       activo: true,
       tokenAcceso: generarTokenAcceso(),
     });
+    setMostrarToken(false);
     setModalOpen(true);
   };
 
   const openEdit = (item) => {
+    setError(null);
     setEditingId(item.id);
     setForm({
       nombre: item.nombre ?? "",
@@ -88,20 +93,28 @@ export const TabUsuarios = () => {
       empresaId: item.empresaId ?? "",
       bodegaIds: collectUsuarioBodegaIds(item),
       activo: item.activo !== false,
-      tokenAcceso: item.tokenAcceso ?? "",
+      tokenAcceso: leerTokenDesdeUsuario(item),
     });
+    setMostrarToken(false);
     setModalOpen(true);
   };
 
   const closeModal = () => {
     setModalOpen(false);
     setEditingId(null);
+    setMostrarToken(false);
     setForm({ nombre: "", email: "", empresaId: "", bodegaIds: [], activo: true, tokenAcceso: "" });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError(null);
     if (!form.nombre?.trim()) return;
+    const tokenVal = normalizarTokenAcceso(form.tokenAcceso);
+    if (tokenVal.length !== 3) {
+      setError("El token de acceso debe tener exactamente 3 letras o números. Se guarda en Firestore como tokenAcceso y es lo que usan los otros módulos al hacer login.");
+      return;
+    }
     const bod = bodegasDeEmpresaSeleccionada();
     const idsSet = new Set(bod.map((b) => b.id).filter(Boolean));
     const bodegaIdsLimpios = [...new Set((form.bodegaIds || []).filter((id) => idsSet.has(id)))];
@@ -115,15 +128,22 @@ export const TabUsuarios = () => {
     }
     setSaving(true);
     try {
-      const tokenVal = (form.tokenAcceso || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 3);
       const payload = {
         nombre: form.nombre.trim(),
         email: form.email?.trim() || null,
         empresaId: form.empresaId || null,
         bodegaIds: form.empresaId ? bodegaIdsLimpios : [],
         activo: !!form.activo,
-        ...(tokenVal.length === 3 && { tokenAcceso: tokenVal }),
-        ...(editingId ? { sheet: deleteField(), bodegaId: deleteField() } : {}),
+        tokenAcceso: tokenVal,
+        ...(editingId
+          ? {
+              sheet: deleteField(),
+              bodegaId: deleteField(),
+              password: deleteField(),
+              token: deleteField(),
+              codigoAcceso: deleteField(),
+            }
+          : {}),
       };
       if (editingId) {
         await updateUsuario(editingId, payload);
@@ -244,6 +264,7 @@ export const TabUsuarios = () => {
               <tr>
                 <th className="px-4 py-3 font-medium">Nombre</th>
                 <th className="px-4 py-3 font-medium">Email</th>
+                <th className="px-4 py-3 font-medium">Token</th>
                 <th className="px-4 py-3 font-medium">Empresa</th>
                 <th className="px-4 py-3 font-medium">Bodegas con acceso</th>
                 <th className="px-4 py-3 font-medium w-20 text-center">Activo</th>
@@ -251,10 +272,18 @@ export const TabUsuarios = () => {
               </tr>
             </thead>
             <tbody className="text-white divide-y divide-border">
-              {list.map((item) => (
+              {list.map((item) => {
+                const tokenTabla = leerTokenDesdeUsuario(item);
+                return (
                 <tr key={item.id} className={`hover:bg-surface-50 ${item.activo === false ? "opacity-60" : ""}`}>
                   <td className="px-4 py-3">{item.nombre || "—"}</td>
                   <td className="px-4 py-3 text-muted">{item.email || "—"}</td>
+                  <td
+                    className="px-4 py-3 text-muted font-mono text-xs"
+                    title={tokenTabla.length === 3 ? `Token: ${tokenTabla}` : "Sin token de 3 caracteres — edita el usuario y guarda"}
+                  >
+                    {tokenTabla.length === 3 ? "•••" : "—"}
+                  </td>
                   <td className="px-4 py-3 text-muted">{getEmpresaNombre(item.empresaId)}</td>
                   <td className="px-4 py-3 text-muted max-w-[220px] truncate" title={etiquetaBodegasAcceso(item)}>
                     {etiquetaBodegasAcceso(item)}
@@ -290,7 +319,8 @@ export const TabUsuarios = () => {
                     </button>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>
@@ -421,12 +451,18 @@ export const TabUsuarios = () => {
               </p>
               <div>
                 <label className="block text-sm text-muted mb-1">
-                  Token de acceso (contraseña de 3 caracteres para entrar a los sistemas)
+                  Token de acceso (3 caracteres — se guarda en Firestore como{" "}
+                  <code className="text-primary/90">tokenAcceso</code>)
                 </label>
-                <div className="flex gap-2">
+                <p className="text-xs text-muted mb-2">
+                  Si el documento tenía el valor en <code>password</code>, <code>token</code> o <code>codigoAcceso</code>, aquí se muestra igual; al guardar se escribe{" "}
+                  <code>tokenAcceso</code> para que el login de los módulos funcione.
+                </p>
+                <div className="flex gap-2 items-center">
                   <input
-                    type="text"
+                    type={mostrarToken ? "text" : "password"}
                     value={form.tokenAcceso}
+                    autoComplete="off"
                     onChange={(e) =>
                       setForm((f) => ({
                         ...f,
@@ -439,8 +475,17 @@ export const TabUsuarios = () => {
                   />
                   <button
                     type="button"
+                    onClick={() => setMostrarToken((v) => !v)}
+                    className="p-2 rounded-lg bg-surface-200 border border-border text-muted hover:text-white hover:bg-surface-50"
+                    title={mostrarToken ? "Ocultar token" : "Mostrar token"}
+                    aria-label={mostrarToken ? "Ocultar token" : "Mostrar token"}
+                  >
+                    {mostrarToken ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setForm((f) => ({ ...f, tokenAcceso: generarTokenAcceso() }))}
-                    className="px-3 py-2 rounded-lg bg-surface-200 border border-border text-muted hover:text-white hover:bg-surface-50 flex items-center gap-1"
+                    className="px-3 py-2 rounded-lg bg-surface-200 border border-border text-muted hover:text-white hover:bg-surface-50 flex items-center gap-1 shrink-0"
                     title="Generar nuevo token"
                   >
                     <RefreshCw className="w-4 h-4" />
@@ -470,7 +515,11 @@ export const TabUsuarios = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={saving || !form.nombre?.trim()}
+                  disabled={
+                    saving ||
+                    !form.nombre?.trim() ||
+                    normalizarTokenAcceso(form.tokenAcceso).length !== 3
+                  }
                   className="px-4 py-2 rounded-lg bg-primary text-black font-medium hover:bg-primary-hover disabled:opacity-50 flex items-center gap-2"
                 >
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}

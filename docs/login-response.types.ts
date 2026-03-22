@@ -15,6 +15,8 @@ export interface LoginUsuarioPublico {
 export interface LoginEmpresaPublica {
   id: string;
   nombre: string | null;
+  /** Clave de Maps del tenant (referrer-restricted); solo si está configurada en empresa. */
+  googleMapsApiKey?: string;
 }
 
 /** Bodega tal como viene en Firestore / respuesta (campos opcionales según datos). */
@@ -40,7 +42,7 @@ export interface LoginBodega {
 export interface LoginClienteResponse {
   usuario: LoginUsuarioPublico;
   empresa: LoginEmpresaPublica | null;
-  /** Solo bodegas a las que el usuario tiene acceso. */
+  /** Solo bodegas asignadas al usuario en Firestore (bodegaIds / bodegaId legado). */
   bodegas: LoginBodega[];
   /** @deprecated Preferir bodegas + bodegaActivaId en sesión. */
   bodegaSeleccionada?: LoginBodega | null;
