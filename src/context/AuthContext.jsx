@@ -9,6 +9,7 @@ import {
   validateAdmonHardcodedLogin,
   isAdmonHardcodedUsername,
 } from "../lib/admonHardcodedAuth";
+import { recordAdmonPanelSession } from "../lib/billingSessionAdmon";
 
 const SESSION_KEY = "uroutes.admon.session.v1";
 
@@ -158,6 +159,11 @@ export const AuthProvider = ({ children }) => {
 
   /** Panel listo: sesión local + Firebase Auth (evita leer Firestore antes de tiempo). */
   const sessionReady = !loading && !!user && !!firebaseUser;
+
+  useEffect(() => {
+    if (!sessionReady) return;
+    recordAdmonPanelSession().catch(() => {});
+  }, [sessionReady]);
 
   const value = {
     user,

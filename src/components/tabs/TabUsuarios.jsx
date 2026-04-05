@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Pencil, Trash2, X, Loader2, RefreshCw, Eye, EyeOff } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Loader2, RefreshCw, Eye, EyeOff, Copy, ClipboardPaste } from "lucide-react";
 import { deleteField } from "firebase/firestore";
 import {
   getEmpresas,
@@ -9,14 +9,9 @@ import {
   deleteUsuario,
 } from "../../lib/firestore";
 import { collectUsuarioBodegaIds } from "../../lib/clienteSesion";
-import { leerTokenDesdeUsuario, normalizarTokenAcceso } from "../../lib/usuarioToken";
-
-const CHARS_TOKEN = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-const generarTokenAcceso = () => {
-  let s = "";
-  for (let i = 0; i < 3; i++) s += CHARS_TOKEN.charAt(Math.floor(Math.random() * CHARS_TOKEN.length));
-  return s;
-};
+import { leerTokenDesdeUsuario, normalizarTokenAcceso, generarTokenAcceso } from "../../lib/usuarioToken";
+import { TODOS_LOS_MODULOS } from "../../lib/constants";
+let clipboardUsuarioForm = null;
 
 export const TabUsuarios = () => {
   const [empresas, setEmpresas] = useState([]);
@@ -31,6 +26,7 @@ export const TabUsuarios = () => {
     email: "",
     empresaId: "",
     bodegaIds: [],
+    modulos: [],
     activo: true,
     tokenAcceso: "",
   });
@@ -77,6 +73,7 @@ export const TabUsuarios = () => {
       email: "",
       empresaId: filterEmpresaId || (empresas[0]?.id ?? ""),
       bodegaIds: [],
+      modulos: [],
       activo: true,
       tokenAcceso: generarTokenAcceso(),
     });
@@ -92,6 +89,7 @@ export const TabUsuarios = () => {
       email: item.email ?? "",
       empresaId: item.empresaId ?? "",
       bodegaIds: collectUsuarioBodegaIds(item),
+      modulos: item.modulos || [],
       activo: item.activo !== false,
       tokenAcceso: leerTokenDesdeUsuario(item),
     });
@@ -103,7 +101,7 @@ export const TabUsuarios = () => {
     setModalOpen(false);
     setEditingId(null);
     setMostrarToken(false);
-    setForm({ nombre: "", email: "", empresaId: "", bodegaIds: [], activo: true, tokenAcceso: "" });
+    setForm({ nombre: "", email: "", empresaId: "", bodegaIds: [], modulos: [], activo: true, tokenAcceso: "" });
   };
 
   const handleSubmit = async (e) => {
@@ -133,6 +131,7 @@ export const TabUsuarios = () => {
         email: form.email?.trim() || null,
         empresaId: form.empresaId || null,
         bodegaIds: form.empresaId ? bodegaIdsLimpios : [],
+        modulos: form.modulos || [],
         activo: !!form.activo,
         tokenAcceso: tokenVal,
         ...(editingId
@@ -212,6 +211,42 @@ export const TabUsuarios = () => {
     setForm((f) => ({ ...f, bodegaIds: [] }));
   };
 
+  const toggleModuloEnForm = (modulo, checked) => {
+    setForm((f) => {
+      const cur = new Set(f.modulos || []);
+      if (checked) cur.add(modulo);
+      else cur.delete(modulo);
+      return { ...f, modulos: [...cur] };
+    });
+  };
+
+  const seleccionarTodosModulosForm = () => {
+    setForm((f) => ({ ...f, modulos: [...TODOS_LOS_MODULOS] }));
+  };
+
+  const limpiarModulosForm = () => {
+    setForm((f) => ({ ...f, modulos: [] }));
+  };
+
+  const handleCopyForm = () => {
+    clipboardUsuarioForm = { ...form };
+    alert("¡Usuario copiado al portapapeles! Abre otro usuario y haz clic en 'Pegar'.");
+  };
+
+  const handlePasteForm = () => {
+    if (!clipboardUsuarioForm) {
+      alert("No hay ningún usuario copiado.");
+      return;
+    }
+    setForm((f) => ({
+      ...f,
+      ...clipboardUsuarioForm,
+      nombre: f.nombre, // Keep the current user being edited name
+      email: f.email,   // Keep the current user being edited email
+      tokenAcceso: f.tokenAcceso || generarTokenAcceso(), // Try to keep their own token if they have one already, otherwise generate new
+    }));
+  };
+
   return (
     <div className="rounded-xl border border-border bg-surface-100 p-6">
       <div className="flex flex-col gap-4 mb-6">
@@ -267,6 +302,7 @@ export const TabUsuarios = () => {
                 <th className="px-4 py-3 font-medium">Token</th>
                 <th className="px-4 py-3 font-medium">Empresa</th>
                 <th className="px-4 py-3 font-medium">Bodegas con acceso</th>
+                <th className="px-4 py-3 font-medium">Módulos</th>
                 <th className="px-4 py-3 font-medium w-20 text-center">Activo</th>
                 <th className="px-4 py-3 font-medium w-28 text-right">Acciones</th>
               </tr>
@@ -287,6 +323,9 @@ export const TabUsuarios = () => {
                   <td className="px-4 py-3 text-muted">{getEmpresaNombre(item.empresaId)}</td>
                   <td className="px-4 py-3 text-muted max-w-[220px] truncate" title={etiquetaBodegasAcceso(item)}>
                     {etiquetaBodegasAcceso(item)}
+                  </td>
+                  <td className="px-4 py-3 text-muted max-w-[150px] truncate" title={(item.modulos || []).join(", ")}>
+                    {(item.modulos || []).length > 0 ? (item.modulos || []).join(", ") : "—"}
                   </td>
                   <td className="px-4 py-3 text-center">
                     {item.activo !== false ? (
@@ -332,23 +371,46 @@ export const TabUsuarios = () => {
           onClick={closeModal}
         >
           <div
-            className="rounded-xl border border-border bg-surface-100 p-6 w-full max-w-md shadow-xl"
+            className="rounded-xl border border-border bg-surface-100 p-6 w-full max-w-5xl shadow-xl max-h-[95vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-white">
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-border/50 shrink-0">
+              <h3 className="text-xl font-medium text-white flex items-center gap-3">
                 {editingId ? "Editar usuario" : "Nuevo usuario"}
               </h3>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="p-2 rounded-lg text-muted hover:text-white hover:bg-surface-50"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleCopyForm}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-surface-200 border border-border text-muted hover:text-white hover:bg-surface-50 transition"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copiar
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePasteForm}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-surface-200 border border-border text-muted hover:text-white hover:bg-surface-50 transition"
+                >
+                  <ClipboardPaste className="w-4 h-4" />
+                  Pegar
+                </button>
+                <div className="w-px h-6 bg-border mx-1"></div>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="p-2 rounded-lg text-muted hover:text-white hover:bg-surface-50"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
+
+            <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 overflow-y-auto pr-2 pb-4">
+                {/* COLUMNA IZQUIERDA: DATOS GENERALES */}
+                <div className="space-y-5">
+                  <div>
                 <label className="block text-sm text-muted mb-1">Nombre</label>
                 <input
                   type="text"
@@ -369,34 +431,99 @@ export const TabUsuarios = () => {
                   placeholder="email@ejemplo.com o 1, 01, 12 para pruebas"
                 />
               </div>
-              <div>
-                <label className="block text-sm text-muted mb-1">Empresa</label>
-                <select
-                  value={form.empresaId}
-                  onChange={(e) => {
-                    const nextEmpresaId = e.target.value;
-                    setForm((f) => {
-                      const bod = empresas.find((x) => x.id === nextEmpresaId);
-                      const valid = new Set(
-                        Array.isArray(bod?.bodegas) ? bod.bodegas.map((b) => b.id).filter(Boolean) : []
-                      );
-                      const nextIds = (f.bodegaIds || []).filter((id) => valid.has(id));
-                      return { ...f, empresaId: nextEmpresaId, bodegaIds: nextIds };
-                    });
-                  }}
-                  className="w-full px-4 py-2 rounded-lg bg-surface-200 border border-border text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="">Sin empresa</option>
-                  {empresas.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-                  <label className="block text-sm text-muted">¿A qué bodegas tiene acceso?</label>
+                  <div>
+                    <label className="block text-sm text-muted mb-1">Empresa</label>
+                    <select
+                      value={form.empresaId}
+                      onChange={(e) => {
+                        const nextEmpresaId = e.target.value;
+                        setForm((f) => {
+                          const bod = empresas.find((x) => x.id === nextEmpresaId);
+                          const valid = new Set(
+                            Array.isArray(bod?.bodegas) ? bod.bodegas.map((b) => b.id).filter(Boolean) : []
+                          );
+                          const nextIds = (f.bodegaIds || []).filter((id) => valid.has(id));
+                          return { ...f, empresaId: nextEmpresaId, bodegaIds: nextIds };
+                        });
+                      }}
+                      className="w-full px-4 py-2 rounded-lg bg-surface-200 border border-border text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="">Sin empresa</option>
+                      {empresas.map((e) => (
+                        <option key={e.id} value={e.id}>
+                          {e.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-muted mb-1">
+                      Token de acceso (3 caracteres — se guarda en Firestore como{" "}
+                      <code className="text-primary/90">tokenAcceso</code>)
+                    </label>
+                    <p className="text-xs text-muted mb-2">
+                      Si el documento tenía el valor en <code>password</code>, <code>token</code> o <code>codigoAcceso</code>, aquí se muestra igual; al guardar se escribe{" "}
+                      <code>tokenAcceso</code> para que el login de los módulos funcione.
+                    </p>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type={mostrarToken ? "text" : "password"}
+                        value={form.tokenAcceso}
+                        autoComplete="off"
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            tokenAcceso: e.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 3),
+                          }))
+                        }
+                        className="w-32 px-4 py-2 rounded-lg bg-surface-200 border border-border text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="Ej. A1B"
+                        maxLength={3}
+                      />
+                      <span className="text-xs font-semibold text-primary px-2 whitespace-nowrap border border-primary/20 bg-primary/10 rounded-md py-1">
+                        3 caracteres
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setMostrarToken((v) => !v)}
+                        className="p-2 rounded-lg bg-surface-200 border border-border text-muted hover:text-white hover:bg-surface-50"
+                        title={mostrarToken ? "Ocultar token" : "Mostrar token"}
+                        aria-label={mostrarToken ? "Ocultar token" : "Mostrar token"}
+                      >
+                        {mostrarToken ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm((f) => ({ ...f, tokenAcceso: generarTokenAcceso() }))}
+                        className="px-3 py-2 rounded-lg bg-surface-200 border border-border text-muted hover:text-white hover:bg-surface-50 flex items-center gap-1 shrink-0"
+                        title="Generar nuevo token"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Generar
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <input
+                      type="checkbox"
+                      id="activo"
+                      checked={form.activo}
+                      onChange={(e) => setForm((f) => ({ ...f, activo: e.target.checked }))}
+                      className="w-5 h-5 rounded border-border bg-surface-200 text-primary focus:ring-primary"
+                    />
+                    <label htmlFor="activo" className="text-sm font-medium text-white cursor-pointer select-none">
+                      Usuario activo (puede usar el sistema)
+                    </label>
+                  </div>
+                </div>
+
+                {/* COLUMNA DERECHA: ACCESOS */}
+                <div className="space-y-6">
+                  <div className="bg-surface-200/20 p-4 rounded-xl border border-border/50">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                      <label className="block font-medium text-white">Bodegas de acceso</label>
                   {form.empresaId && bodegasDeEmpresaSeleccionada().length > 0 && (
                     <div className="flex gap-2 shrink-0">
                       <button
@@ -441,71 +568,49 @@ export const TabUsuarios = () => {
                     })}
                   </ul>
                 )}
-                <p className="text-xs text-muted mt-2 leading-relaxed">
-                  Solo verá dashboards y datos de las bodegas marcadas. El login devuelve ese subconjunto en{" "}
-                  <code className="text-primary/90">bodegas</code> e <code className="text-primary/90">usuario.bodegaIds</code>.
-                </p>
-              </div>
-              <p className="text-xs text-muted rounded-lg bg-surface-200/50 border border-border/60 px-3 py-2">
-                La hoja de Google Sheet se asigna por bodega en la ficha de la empresa, no por usuario.
-              </p>
-              <div>
-                <label className="block text-sm text-muted mb-1">
-                  Token de acceso (3 caracteres — se guarda en Firestore como{" "}
-                  <code className="text-primary/90">tokenAcceso</code>)
-                </label>
-                <p className="text-xs text-muted mb-2">
-                  Si el documento tenía el valor en <code>password</code>, <code>token</code> o <code>codigoAcceso</code>, aquí se muestra igual; al guardar se escribe{" "}
-                  <code>tokenAcceso</code> para que el login de los módulos funcione.
-                </p>
-                <div className="flex gap-2 items-center">
-                  <input
-                    type={mostrarToken ? "text" : "password"}
-                    value={form.tokenAcceso}
-                    autoComplete="off"
-                    onChange={(e) =>
-                      setForm((f) => ({
-                        ...f,
-                        tokenAcceso: e.target.value.replace(/[^a-zA-Z0-9]/g, "").slice(0, 3),
-                      }))
-                    }
-                    className="w-24 px-4 py-2 rounded-lg bg-surface-200 border border-border text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-primary"
-                    placeholder="•••"
-                    maxLength={3}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setMostrarToken((v) => !v)}
-                    className="p-2 rounded-lg bg-surface-200 border border-border text-muted hover:text-white hover:bg-surface-50"
-                    title={mostrarToken ? "Ocultar token" : "Mostrar token"}
-                    aria-label={mostrarToken ? "Ocultar token" : "Mostrar token"}
-                  >
-                    {mostrarToken ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, tokenAcceso: generarTokenAcceso() }))}
-                    className="px-3 py-2 rounded-lg bg-surface-200 border border-border text-muted hover:text-white hover:bg-surface-50 flex items-center gap-1 shrink-0"
-                    title="Generar nuevo token"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    Generar
-                  </button>
+                      <p className="text-xs text-muted mt-3 leading-relaxed border-t border-border/50 pt-2">
+                        Verá dashboards/datos de las bodegas marcadas. (La hoja de Google Sheet se asigna por bodega en la ficha de la empresa, no por usuario).
+                      </p>
+                    </div>
+
+                  <div className="bg-surface-200/20 p-4 rounded-xl border border-border/50">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                      <label className="block font-medium text-white">Módulos permitidos</label>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={seleccionarTodosModulosForm}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Marcar todos
+                    </button>
+                    <span className="text-muted text-xs">·</span>
+                    <button type="button" onClick={limpiarModulosForm} className="text-xs text-muted hover:text-white">
+                      Quitar todos
+                    </button>
+                  </div>
+                </div>
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 mt-2">
+                      {TODOS_LOS_MODULOS.map((modulo) => {
+                        const checked = (form.modulos || []).includes(modulo);
+                        return (
+                          <label key={modulo} className={`flex items-center gap-3 px-3 py-2 cursor-pointer border rounded-lg transition-colors ${checked ? 'bg-primary/10 border-primary/30' : 'bg-surface-200/40 border-border hover:bg-surface-200/80'}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => toggleModuloEnForm(modulo, e.target.checked)}
+                              className="w-4 h-4 rounded border-border bg-surface-200 text-primary focus:ring-primary shrink-0"
+                            />
+                            <span className={`text-sm ${checked ? 'text-white font-medium' : 'text-white/70'}`}>{modulo}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="activo"
-                  checked={form.activo}
-                  onChange={(e) => setForm((f) => ({ ...f, activo: e.target.checked }))}
-                  className="w-4 h-4 rounded border-border bg-surface-200 text-primary focus:ring-primary"
-                />
-                <label htmlFor="activo" className="text-sm text-muted">
-                  Usuario activo (si no está marcado, no podrá usar el sistema pero se conservan sus datos)
-                </label>
-              </div>
-              <div className="flex gap-2 mt-6 justify-end">
+
+              <div className="flex gap-3 justify-end pt-5 border-t border-border mt-2 shrink-0">
                 <button
                   type="button"
                   onClick={closeModal}

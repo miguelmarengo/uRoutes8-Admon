@@ -1,9 +1,11 @@
 # Login unificado entre módulos (empresa / usuario / bodega)
 
 **Archivo:** `docs/LOGIN_UNIFICADO_MODULOS.md`  
-**Última revisión:** 2026-03-21
+**Última revisión:** 2026-03-22
 
-Referencia única para que los programas que den acceso a operadores (web, scripts, etc.) se comporten **igual**. La **app Kotlin** puede usar UI distinta, pero conviene el **mismo contrato HTTP y JSON** descrito aquí.
+Referencia única para que los programas que den acceso a **operadores de campo** (web, scripts, etc.) se comporten **igual** vía **`loginCliente`** / JWT Optimizador. La **app Kotlin** puede usar UI distinta, pero conviene el **mismo contrato HTTP y JSON** descrito aquí.
+
+El **panel webAdmon** (administración de empresas/usuarios en el navegador) **no** entra en ese contrato: usa otro flujo de sesión (§13).
 
 ---
 
@@ -20,7 +22,8 @@ Referencia única para que los programas que den acceso a operadores (web, scrip
 9. [Resumen](#9-resumen-en-una-frase)  
 10. [Ejemplo HTML, tipos TS, sesión, seguridad](#10-continuación-ejemplo-listo-tipos-y-sesión)  
 11. [Ejecutar el login, guardar sesión y leer Sheet / Firestore](#11-ejecutar-el-login-guardar-sesión-y-leer-sheet--firestore)  
-12. [Cómo aplicar esto en cada módulo](#12-cómo-aplicar-esto-en-cada-módulo)
+12. [Cómo aplicar esto en cada módulo](#12-cómo-aplicar-esto-en-cada-módulo)  
+13. [Panel webAdmon (excepción: no usa `loginCliente`)](#13-panel-webadmon-excepción-no-usa-logincliente)
 
 ---
 
@@ -34,8 +37,8 @@ Referencia única para que los programas que den acceso a operadores (web, scrip
 
 Reglas de negocio:
 
-- En el **panel**, si la empresa tiene bodegas, cada usuario debe tener **al menos una** bodega marcada en `bodegaIds`; eso define **a qué puede acceder** (si marcas las cuatro, el login trae **cuatro**; si solo una, trae **una**).
-- El **login HTTP** (`loginCliente`) y **webOptimizador** solo envían en **`bodegas`** las bodegas **asignadas a ese usuario** (intersección con el catálogo de la empresa). **No** se envía el listado completo de la empresa al cliente.
+- Si el usuario **no está activo** (`activo: false`), el acceso debe ser denegado automáticamente (HTTP 403 o validado en el frontend dependiente de la arquitectura).
+- Tras el login general, de acuerdo a la plataforma que se esté cursando (Ej. `TMS-uRoutes-Delivery` o `MobilityApp`), la lógica de inicio de sesión **debe necesariamente saber qué módulo es** y revisar si dicho nombre de módulo se encuentra en el arreglo **`modulos`** permitidos para el usuario. Si no está autorizado, se le debe lanzar un error y bloquear el paso.
 - Si el usuario **no** tiene `bodegaIds` (ni `bodegaId` legado) y la empresa **sí** tiene bodegas en Firestore, el login **no es válido** (Optimizador: no matchea usuario; `loginCliente`: `bodegas` vacío).
 - Si la empresa tiene **`googleMapsApiKey`** en Firestore, el JSON de `loginCliente` puede incluir **`empresa.googleMapsApiKey`** (clave de navegador; sin `firebaseConfig` ni service accounts).
 - Tras login, el operador elige **`bodegaActivaId`** para la sesión (trabajo y dashboards).
@@ -51,7 +54,7 @@ Reglas de negocio:
 |------|--------|-------------|--------|
 | 1 | **Empresa** | Recomendado | Código, nombre corto o selector. Contexto para el operador; extensiones futuras del API. |
 | 2 | **Usuario** | Opcional | Email o código interno; puede ir vacío si solo usan token. |
-| 3 | **Token de acceso** | **Sí** | Tres caracteres: `tokenAcceso` del panel. |
+| 3 | **Token de acceso** | **Sí** | **Aclarar visiblemente en la UI:** "Contraseña de 3 caracteres". Su equivalente es el `tokenAcceso` del panel. |
 
 Al enviar: **POST** al endpoint (§4). Hoy el backend resuelve al usuario **solo con el token** normalizado (sin espacios, 3 caracteres). Empresa/Usuario en pantalla pueden ser **recordatorio visual** hasta exista validación en servidor.
 
@@ -82,6 +85,7 @@ Toda vista que use hoja Google o datos por centro debe filtrar por **`bodegaActi
 
 - `id`, `nombre`, `email`, `empresaId`, `activo`
 - **`bodegaIds`**: ids autorizados en Firestore (la lista útil para UI es **`bodegas`**)
+- **`modulos`**: arreglo de strings con los nombres exactos de los módulos a los que tiene acceso (ej. `["CRM-uRoutes-ClientPortal", "MobilityApp"]`).
 
 ### 3.2 `empresa`
 
@@ -110,6 +114,7 @@ Toda vista que use hoja Google o datos por centro debe filtrar por **`bodegaActi
     "email": "m@ejemplo.com",
     "empresaId": "empX",
     "bodegaIds": ["b1", "b2"],
+    "modulos": ["TMS-uRoutes-Delivery", "MobilityApp"],
     "activo": true
   },
   "empresa": {
@@ -184,11 +189,14 @@ Misma API y mismas reglas: POST → parsear `bodegas` → fijar **`bodegaActivaI
 ## 7. Checklist para cada módulo nuevo
 
 - [ ] Orden visual: Empresa → Usuario (opcional) → Token.
+- [ ] En el campo "Token/Password", colocar explícitamente en el placeholder/label: **"3 caracteres" o "3 dígitos"**.
 - [ ] `POST` con `{ "tokenAcceso": "..." }` y manejo de errores §4.
-- [ ] Si `bodegas.length === 0` → mensaje de soporte.
+- [ ] Comprobar `usuario.activo === true`. Si es falso, rechazar acceso al instante.
+- [ ] Incorporar el identificador del módulo actual (ej. `TMS-uRoutes-Delivery`) en la lógica de front-end y comprobar que esté en `usuario.modulos`. Si no, mostrar *"Operador sin acceso a este módulo"*.
+- [ ] Si `bodegas.length === 0` → mensaje de soporte por falta de bodegas.
 - [ ] Si `bodegas.length === 1` → auto `bodegaActivaId` (opcional pero coherente).
-- [ ] Si `bodegas.length > 1` → selector explícito.
-- [ ] Guardar sesión con **`bodegaActivaId`**; no confiar en listas de bodegas cargadas aparte del login.
+- [ ] Si `bodegas.length > 1` → selector explícito para el usuario.
+- [ ] Guardar sesión con **`bodegaActivaId`**; no confiar en listas extrañas.
 - [ ] Al cambiar bodega en sesión, invalidar datos/caché del dashboard.
 - [ ] HTTPS en producción.
 
@@ -202,6 +210,8 @@ Misma API y mismas reglas: POST → parsear `bodegas` → fijar **`bodegaActivaI
 | Resolución en admin (con sesión Firebase) | `src/lib/firestore.js` (`resolveClienteSesionPorTokenAcceso`, …) |
 | Cloud Function | `functions/index.js` (`loginCliente`), `functions/loginPayload.js` |
 | Panel: empresas / bodegas / usuarios | `src/components/tabs/TabEmpresas.jsx`, `TabUsuarios.jsx` |
+| Panel: login + Firebase para Firestore | `src/context/AuthContext.jsx`, `src/lib/admonHardcodedAuth.js`, `src/components/ProtectedRoute.jsx` (§13) |
+| Deploy panel (Cloud Run) | `deploy.sh`, `docs/DEPLOY_WEBADMON.md` |
 | Ejemplo HTML | `docs/ejemplo-login-vanilla/index.html` |
 | Tipos TypeScript | `docs/login-response.types.ts` |
 
@@ -246,10 +256,12 @@ El ejemplo HTML usa exactamente **`uroutes.session.v1`**.
 ### 10.4 Algoritmo mínimo (pseudo)
 
 1. `POST` → parsear JSON como respuesta de login.  
-2. Si no hay `bodegas` o `length === 0` → error.  
-3. Si `length === 1` → `bodegaActivaId = bodegas[0].id`.  
-4. Si `length > 1` → UI de selección.  
-5. Persistir sesión y entrar al módulo.
+2. Verificar que `usuario.activo === true`. Si es falso, arrojar error de inactividad.
+3. Verificar permisos de módulo: si `usuario.modulos` NO contiene el nombre clave de nuestra app (e.g. `"MobilityApp"`), rechazar.
+4. Si no hay `bodegas` o `length === 0` → error de asignación de zonas.  
+5. Si `length === 1` → `bodegaActivaId = bodegas[0].id`.  
+6. Si `length > 1` → UI de selección de bodega operativa.  
+7. Persistir sesión y entrar al módulo.
 
 ### 10.5 Seguridad
 
@@ -271,10 +283,12 @@ Esta sección es la guía operativa para programadores: **cómo llamar al login*
 6. **Construir el objeto de sesión** (§11.2) y **guardarlo** (§11.3).
 7. Redirigir o montar el layout del módulo; en cada pantalla **leer la sesión** desde memoria/`sessionStorage` (§11.4–11.5).
 
-**Ejemplo mínimo (JavaScript):**
+**Ejemplo mínimo genérico (JavaScript) para copiar a cualquier módulo:**
 
 ```javascript
 const LOGIN_URL = "https://us-central1-TU_PROYECTO.cloudfunctions.net/loginCliente";
+// IMPORTANTE: Cada módulo debe definir su constante de identidad explícitamente:
+const MODULO_ACTUAL = "TMS-uRoutes-Delivery"; 
 
 function normalizarToken(t) {
   return String(t ?? "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 3);
@@ -282,7 +296,7 @@ function normalizarToken(t) {
 
 async function ejecutarLogin(tokenCrudo) {
   const tokenAcceso = normalizarToken(tokenCrudo);
-  if (tokenAcceso.length !== 3) throw new Error("Token debe tener 3 caracteres");
+  if (tokenAcceso.length !== 3) throw new Error("Aviso: El Token de acceso son exactamente 3 digitos/caracteres");
 
   const res = await fetch(LOGIN_URL, {
     method: "POST",
@@ -297,13 +311,25 @@ async function ejecutarLogin(tokenCrudo) {
     throw err;
   }
 
+  // 1. Validar Actividad General
+  if (data.usuario?.activo === false) {
+    throw new Error("El usuario se encuentra inactivo. Consulte a su administrador.");
+  }
+
+  // 2. Validar Módulo Especifico
+  const { modulos } = data.usuario || {};
+  if (!modulos || !modulos.includes(MODULO_ACTUAL)) {
+    throw new Error(`Acceso denegado: No tiene contratado o habilitado el módulo ${MODULO_ACTUAL}`);
+  }
+
+  // 3. Validar Bodegas
   const bodegas = Array.isArray(data.bodegas) ? data.bodegas : [];
-  if (bodegas.length === 0) throw new Error("Sin bodegas asignadas");
+  if (bodegas.length === 0) throw new Error("Sin bodegas asignadas para trabajar");
 
-  let bodegaActivaId =
-    bodegas.length === 1 ? bodegas[0].id : null; // si hay >1, asignar tras UI
+  let bodegaActivaId = bodegas.length === 1 ? bodegas[0].id : null; 
+  // si hay >1, pasamos a la pantalla del UI para seleccionar, y luego guardamos.
 
-  return { data, bodegaActivaId }; // si hay selector, vuelve a llamar a guardarSesion cuando el usuario elija
+  return { data, bodegaActivaId };
 }
 ```
 
@@ -455,6 +481,7 @@ Usa la **misma regla mental** en todos: lo que el servidor pone en **`bodegas`**
 | **Apps con `loginCliente`** (POST token) | JSON de la Cloud Function + tu `sessionStorage` / store | `response.bodegas` | `response.empresa?.googleMapsApiKey` |
 | **webOptimizador** | Cookie `access_token` (JWT) + `GET /api/me` | `data.bodegas` y `data.sheets` (el listbox de hojas sale de `bodegas` con `sheet_id`) | `data.googleMapsApiKey` o `GET /api/config` |
 | **Kotlin / nativo** | Igual que fila 1: POST y parsear JSON | `bodegas` | `empresa.googleMapsApiKey` opcional |
+| **Panel webAdmon** | **No** aplica `loginCliente`; ver §13 | — | — |
 
 **Checklist rápido al integrar un módulo nuevo**
 
@@ -471,3 +498,31 @@ Usa la **misma regla mental** en todos: lo que el servidor pone en **`bodegas`**
 | Optimizador login Firestore | `webOptimizador/app/admon_login.py` |
 | JWT + `/api/me` | `webOptimizador/app/main.py` (`bodegas` en payload, `google_maps_api_key`) |
 | Tipos TS copiables | `webAdmon/docs/login-response.types.ts` |
+
+---
+
+## 13. Panel webAdmon (excepción: no usa `loginCliente`)
+
+Quien edita **empresas** y **usuarios** en el navegador **no** usa el POST `tokenAcceso` de este documento. El panel es una SPA que habla con **Firestore** con las reglas actuales (`request.auth != null` en `firestore.rules`).
+
+### 13.1 Dos capas de acceso
+
+| Capa | Qué es | Dónde |
+|------|--------|--------|
+| **Puerta del panel** | Usuario/contraseña cortos definidos en código (`gaby`/`maria`/`mm` y sus claves en `src/lib/admonHardcodedAuth.js`) | Tras validar, se guarda sesión en `sessionStorage` bajo la clave **`uroutes.admon.session.v1`**. |
+| **Firebase Auth (Firestore)** | Mismo proyecto que el Admon: **Email/Password** de un usuario creado en Firebase Console | Variables de entorno **`VITE_FIREBASE_PANEL_EMAIL`** y **`VITE_FIREBASE_PANEL_PASSWORD`** (también en el build Docker/Cloud Build). Sin esto, Firestore responde *Missing or insufficient permissions*. |
+
+Tras el login del panel, el cliente espera a que exista usuario en Firebase (`sessionReady`) antes de montar rutas protegidas, para que un **refresco de página** no dispare lecturas a Firestore antes de tiempo.
+
+### 13.2 Qué **no** confundir
+
+- **`loginCliente`** y **`UroutesSessionV1`** (`uroutes.session.v1`) son para **apps del operador** (token de 3 caracteres, `bodegas`, `bodegaActivaId`).
+- **`uroutes.admon.session.v1`** y **`VITE_FIREBASE_PANEL_*`** son solo del **panel admin** en este repo.
+
+### 13.3 Variables y despliegue
+
+- Plantillas: `.env.local.example`, `.env.deploy.example`.
+- Guía de deploy Cloud Run: **`docs/DEPLOY_WEBADMON.md`**.
+- Las reglas de Firestore del proyecto deben permitir al usuario **`VITE_FIREBASE_PANEL_EMAIL`** leer/escribir `empresas`, `usuarios` y `bitacora` (como en `firestore.rules` de este repo).
+
+Si en el futuro unificáis el panel con `loginCliente`, habría que replantear reglas o usar Custom Claims; **hoy** el contrato unificado de operadores **no cambia** por el panel.

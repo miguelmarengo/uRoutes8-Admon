@@ -10,6 +10,8 @@ import {
   ChevronUp,
   Building2,
   Trash,
+  Copy,
+  ClipboardPaste,
 } from "lucide-react";
 import { deleteField } from "firebase/firestore";
 import {
@@ -18,6 +20,8 @@ import {
   updateEmpresa,
   deleteEmpresa,
 } from "../../lib/firestore";
+
+let clipboardEmpresaForm = null;
 
 const newBodega = () => ({
   id: typeof crypto !== "undefined" && crypto.randomUUID
@@ -302,8 +306,6 @@ export const TabEmpresas = () => {
   const [error, setError] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [wizardStep, setWizardStep] = useState(1);
-  const [editTab, setEditTab] = useState("general");
   const [bodegas, setBodegas] = useState([]);
   const [expandedBodegaIds, setExpandedBodegaIds] = useState(() => new Set());
   const [form, setForm] = useState({
@@ -375,8 +377,6 @@ export const TabEmpresas = () => {
   }, []);
 
   const resetModalUi = () => {
-    setWizardStep(1);
-    setEditTab("general");
     setBodegas([]);
     setExpandedBodegaIds(new Set());
   };
@@ -424,6 +424,38 @@ export const TabEmpresas = () => {
       firebaseServiceAccountJson: "",
       googleSheetServiceAccountJson: "",
     });
+  };
+
+  const handleCopyForm = () => {
+    clipboardEmpresaForm = {
+      firebaseConfigJson: form.firebaseConfigJson,
+      llaves: form.llaves,
+      firebaseServiceAccountJson: form.firebaseServiceAccountJson,
+      googleSheetServiceAccountJson: form.googleSheetServiceAccountJson,
+      bodegas: typeof structuredClone === "function" ? structuredClone(bodegas) : JSON.parse(JSON.stringify(bodegas))
+    };
+    alert("Configuración de empresa copiada. Puedes pegarla en otra.");
+  };
+
+  const handlePasteForm = () => {
+    if (!clipboardEmpresaForm) {
+      alert("No hay configuración copiada en memoria.");
+      return;
+    }
+    const currentName = form.nombre;
+    setForm({
+      ...clipboardEmpresaForm,
+      nombre: currentName
+    });
+    
+    // Asignamos nuevos IDs aleatorios a las bodegas pegadas
+    const newBodegas = (clipboardEmpresaForm.bodegas || []).map(b => ({
+      ...b,
+      id: crypto.randomUUID ? crypto.randomUUID() : `b-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+    }));
+    
+    setBodegas(newBodegas);
+    setExpandedBodegaIds(new Set(newBodegas.map(b => b.id)));
   };
 
   const toggleBodegaExpanded = (id) => {
@@ -538,16 +570,6 @@ export const TabEmpresas = () => {
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
-    if (!editingId && wizardStep === 1) {
-      if (!validateStep1()) return;
-      setWizardStep(2);
-      if (bodegas.length === 0) {
-        const nb = newBodega();
-        setBodegas([nb]);
-        setExpandedBodegaIds(new Set([nb.id]));
-      }
-      return;
-    }
     await persistEmpresa();
   };
 
@@ -565,8 +587,6 @@ export const TabEmpresas = () => {
   };
 
   const isCreate = !editingId;
-  const showGeneralFields = !isCreate ? editTab === "general" : wizardStep === 1;
-  const showBodegasFields = !isCreate ? editTab === "bodegas" : wizardStep === 2;
 
   return (
     <div className="rounded-xl border border-border bg-surface-100 p-6">
@@ -684,65 +704,56 @@ export const TabEmpresas = () => {
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={closeModal}>
           <div
-            className="rounded-xl border border-border bg-surface-100 p-6 w-full max-w-2xl shadow-xl max-h-[90vh] overflow-y-auto"
+            className="rounded-xl border border-border bg-surface-100 p-6 w-full max-w-5xl shadow-xl max-h-[95vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-lg font-medium text-white">
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-border/50 shrink-0">
+              <h3 className="text-xl font-medium text-white flex items-center gap-3">
                 {editingId ? "Editar empresa" : "Nueva empresa"}
               </h3>
-              <button
-                disabled={saving}
-                type="button"
-                onClick={closeModal}
-                className="p-2 rounded-lg text-muted hover:text-white hover:bg-surface-50"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyForm}
+                  className="px-3 py-1.5 flex items-center gap-2 rounded-lg bg-surface-200 text-sm text-white hover:bg-surface-300 transition"
+                  title="Copiar configuración (ideal para multi-entorno)"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span>Copiar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePasteForm}
+                  className="px-3 py-1.5 flex items-center gap-2 rounded-lg bg-surface-200 text-sm text-white hover:bg-surface-300 transition"
+                  title="Pegar configuración de otra empresa"
+                >
+                  <ClipboardPaste className="w-4 h-4" />
+                  <span>Pegar</span>
+                </button>
+                <div className="w-px h-6 bg-border/50 mx-2" />
+                <button
+                  disabled={saving}
+                  type="button"
+                  onClick={closeModal}
+                  className="p-2 rounded-lg text-muted hover:text-white hover:bg-surface-50 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            {isCreate && (
-              <div className="mb-4 flex items-center gap-2 text-sm" role="status" aria-live="polite">
-                <span
-                  className={`px-2 py-0.5 rounded-md ${wizardStep === 1 ? "bg-primary text-black font-medium" : "bg-surface-200 text-muted"}`}
-                >
-                  Paso 1 de 2
-                </span>
-                <span className="text-muted">·</span>
-                <span className={wizardStep === 1 ? "text-white" : "text-muted"}>Datos e integraciones</span>
-                <span className="text-muted">→</span>
-                <span className={wizardStep === 2 ? "text-white" : "text-muted"}>Bodegas</span>
-              </div>
-            )}
-
-            {!isCreate && (
-              <div className="mb-4 flex rounded-lg border border-border overflow-hidden p-0.5 bg-surface-200/50">
-                <button
-                  type="button"
-                  onClick={() => setEditTab("general")}
-                  className={`flex-1 py-2 text-sm rounded-md transition ${editTab === "general" ? "bg-surface-100 text-white shadow-sm" : "text-muted hover:text-white"}`}
-                >
-                  General
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditTab("bodegas")}
-                  className={`flex-1 py-2 text-sm rounded-md transition ${editTab === "bodegas" ? "bg-surface-100 text-white shadow-sm" : "text-muted hover:text-white"}`}
-                >
-                  Bodegas ({bodegas.length})
-                </button>
-              </div>
-            )}
-
             {error && (
-              <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+              <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm shrink-0">
                 {error}
               </div>
             )}
 
-            <form onSubmit={handleFormSubmit} className="space-y-4">
-              {showGeneralFields && (
-                <>
+            <div className="flex-1 overflow-y-auto min-h-0 pr-2 custom-scrollbar">
+              <form id="form-empresa" onSubmit={handleFormSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-primary mb-1">Datos Generales e Integraciones</h4>
+                  </div>
                   <div>
                     <label className="block text-sm text-muted mb-1">Nombre</label>
                     <input
@@ -751,7 +762,7 @@ export const TabEmpresas = () => {
                       onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
                       className="w-full px-4 py-2 rounded-lg bg-surface-200 border border-border text-white placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-primary"
                       placeholder="Nombre de la empresa"
-                      autoFocus={isCreate && wizardStep === 1}
+                      autoFocus={isCreate}
                     />
                   </div>
                   <div>
@@ -811,16 +822,13 @@ export const TabEmpresas = () => {
                       spellCheck={false}
                     />
                   </div>
-                </>
-              )}
+                </div>
 
-              {showBodegasFields && (
-                <div className="space-y-3 pt-2 border-t border-border">
+                <div className="space-y-3">
                   <div>
-                    <h4 className="text-sm font-medium text-white">Bodegas que opera esta empresa</h4>
+                    <h4 className="text-sm font-semibold text-primary">Bodegas Operativas</h4>
                     <p className="text-xs text-muted mt-1 leading-relaxed">
-                      Paso opcional en el sentido de que puedes guardar sin rellenar tarjetas vacías; si introduces datos, cada bodega necesita nombre y su propia hoja de Google Sheet.
-                      En el siguiente paso del alta te pedimos esto para no mezclar integraciones con ubicaciones.
+                      Cada bodega necesita al menos un nombre. Puedes añadir tantas como instalaciones maneje el sistema de esta empresa.
                     </p>
                   </div>
                   <div className="space-y-2">
@@ -839,55 +847,33 @@ export const TabEmpresas = () => {
                   <button
                     type="button"
                     onClick={addBodega}
-                    className="inline-flex items-center gap-2 text-sm text-primary hover:underline"
+                    className="inline-flex items-center gap-2 text-sm text-primary hover:underline mt-2"
                   >
                     <Plus className="w-4 h-4" />
                     Añadir otra bodega
                   </button>
                 </div>
-              )}
+              </form>
+            </div>
 
-              <div className="flex flex-wrap gap-2 mt-6 justify-end pt-2 border-t border-border">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="px-4 py-2 rounded-lg text-muted hover:text-white hover:bg-surface-50"
-                >
-                  Cancelar
-                </button>
-                {isCreate && wizardStep === 2 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setError(null);
-                      setWizardStep(1);
-                    }}
-                    className="px-4 py-2 rounded-lg border border-border text-muted hover:text-white hover:bg-surface-50"
-                  >
-                    ← Atrás
-                  </button>
-                )}
-                {isCreate && wizardStep === 1 && (
-                  <button
-                    type="submit"
-                    disabled={saving || !form.nombre?.trim()}
-                    className="px-4 py-2 rounded-lg bg-primary text-black font-medium hover:bg-primary-hover disabled:opacity-50"
-                  >
-                    Siguiente: bodegas
-                  </button>
-                )}
-                {((isCreate && wizardStep === 2) || !isCreate) && (
-                  <button
-                    type="submit"
-                    disabled={saving || !form.nombre?.trim()}
-                    className="px-4 py-2 rounded-lg bg-primary text-black font-medium hover:bg-primary-hover disabled:opacity-50 flex items-center gap-2 min-w-[120px] justify-center"
-                  >
-                    {saving && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
-                    {saving ? "Guardando…" : editingId ? "Guardar" : "Guardar empresa"}
-                  </button>
-                )}
-              </div>
-            </form>
+            <div className="flex justify-end gap-3 pt-4 mt-2 border-t border-border/50 shrink-0">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="px-4 py-2 rounded-lg text-muted hover:text-white hover:bg-surface-50 transition"
+              >
+                Cancelar
+              </button>
+              <button
+                form="form-empresa"
+                type="submit"
+                disabled={saving || !form.nombre?.trim()}
+                className="px-4 py-2 rounded-lg bg-primary text-black font-medium hover:bg-primary-hover transition disabled:opacity-50 flex items-center gap-2 min-w-[140px] justify-center"
+              >
+                {saving && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
+                {saving ? "Guardando…" : "Guardar empresa"}
+              </button>
+            </div>
           </div>
         </div>
       )}

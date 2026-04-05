@@ -11,6 +11,16 @@ export const TOKEN_FIELDS_FIRESTORE = [
   "codigo",
 ];
 
+const CHARS_TOKEN = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+export function generarTokenAcceso() {
+  let s = "";
+  for (let i = 0; i < 3; i++) {
+    s += CHARS_TOKEN.charAt(Math.floor(Math.random() * CHARS_TOKEN.length));
+  }
+  return s;
+}
+
 export function normalizarTokenAcceso(tokenRaw) {
   return String(tokenRaw ?? "")
     .replace(/[^a-zA-Z0-9]/g, "")

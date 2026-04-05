@@ -88,6 +88,7 @@ export function buildClienteLoginResponse(usuario, empresa) {
       email: usuario.email ?? null,
       empresaId: usuario.empresaId ?? null,
       bodegaIds,
+      modulos: usuario.modulos || [],
       activo: usuario.activo !== false,
     },
     empresa: empresa
