@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-set -e
-cd "$(dirname "$0")"
-
-if [[ ! -d node_modules ]]; then
-  echo "Instalando dependencias..."
-  npm install
+# Bump VERSION (+1) y arranca Vite en modo desarrollo.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MONOREPO="$(cd "$ROOT/.." && pwd)"
+# shellcheck source=/dev/null
+source "$MONOREPO/scripts/module_version.sh"
+module_version_bump "$ROOT/VERSION"
+cd "$ROOT"
+if [[ ! -f node_modules/.bin/vite ]]; then
+  echo ">>> Falta Vite en node_modules. Instalando dependencias (npm ci)…"
+  npm ci || npm install
 fi
-
-echo "Iniciando servidor de desarrollo..."
-npm run dev
+exec npm run dev

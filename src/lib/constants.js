@@ -18,7 +18,7 @@ export const ETIQUETA_MODULO = {
   "TMS-uRoutes-DocAudit": "Admin - Auditoría de Documentos - Web",
   "CRM-uRoutes-ClientPortal": "CRM - Cliente Portal de Entregas - Web",
   "TMS-uRoutes-MobilityApp": "TMS - Mobility Entregas - App",
-  "TMS-uRoutes-RouterEngine": "TMS - Motor de Rutas -Web",
+  "TMS-uRoutes-RouterEngine": "TMS - Motor de Rutas - Web",
   "TMS-uRoutes-Delivery": "TMS - Portal de Entregas - Web",
   "WMS-uRoutes-StoreInventory": "WMS - Mobility Inventario en Tienda - App",
   ConteosTransferenciasApp: "WMS - Mobility Conteos Transferencias - App",

@@ -5,6 +5,7 @@ import { TabEmpresas } from "../components/tabs/TabEmpresas";
 import { TabUsuarios } from "../components/tabs/TabUsuarios";
 import { TabBitacora } from "../components/tabs/TabBitacora";
 import { TabEstadisticas } from "../components/tabs/TabEstadisticas";
+import { APP_VERSION } from "../lib/version";
 
 const TABS = [
   { id: "empresas", label: "Empresas", icon: Building2, component: TabEmpresas },
@@ -27,7 +28,17 @@ export const DashboardPage = () => {
   return (
     <div className="min-h-screen bg-surface-900 flex flex-col font-sans">
       <header className="h-14 border-b border-border bg-surface-200 flex items-center justify-between px-4 shrink-0">
-        <h1 className="text-lg font-semibold text-white">uRoutes Admin</h1>
+        <div className="flex items-center gap-3 min-w-0">
+          <h1 className="text-lg font-semibold text-white truncate">uRoutes Admin</h1>
+          {APP_VERSION ? (
+            <span
+              className="text-[11px] font-mono text-muted border border-border/60 rounded px-2 py-0.5 shrink-0"
+              title="Versión del panel (mismo build que el login)"
+            >
+              v{APP_VERSION}
+            </span>
+          ) : null}
+        </div>
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted truncate max-w-[180px]">
             {user?.displayName ?? user?.email ?? "—"}

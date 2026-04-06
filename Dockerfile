@@ -22,7 +22,8 @@ ENV VITE_FIREBASE_PANEL_PASSWORD=$VITE_FIREBASE_PANEL_PASSWORD
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+# Evita mezclar un dist anterior en la capa de Docker con el build nuevo
+RUN rm -rf dist && npm run build
 
 # Run
 FROM node:20-alpine
@@ -30,6 +31,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 RUN echo '{"type":"module"}' > package.json
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/VERSION ./VERSION
 COPY server.js ./
 EXPOSE 8080
 CMD ["node", "server.js"]

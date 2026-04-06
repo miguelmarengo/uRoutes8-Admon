@@ -1,7 +1,7 @@
 {
   "name": "uroutes-admin",
   "private": true,
-  "version": "1.0.0",
+  "version": "9.2.19",
   "type": "module",
   "scripts": {
     "dev": "vite",

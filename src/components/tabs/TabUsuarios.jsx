@@ -1,5 +1,16 @@
 import { useState, useEffect, useMemo } from "react";
-import { Plus, Pencil, Trash2, X, Loader2, RefreshCw, Eye, EyeOff, Copy, ClipboardPaste } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Loader2,
+  RefreshCw,
+  Eye,
+  EyeOff,
+  Copy,
+  ClipboardPaste,
+  ArrowLeft,
+} from "lucide-react";
 import { deleteField } from "firebase/firestore";
 import {
   getEmpresas,
@@ -11,6 +22,7 @@ import {
 import { collectUsuarioBodegaIds } from "../../lib/clienteSesion";
 import { leerTokenDesdeUsuario, normalizarTokenAcceso, generarTokenAcceso } from "../../lib/usuarioToken";
 import { TODOS_LOS_MODULOS, etiquetaModulo } from "../../lib/constants";
+import { APP_VERSION } from "../../lib/version";
 let clipboardUsuarioForm = null;
 
 export const TabUsuarios = () => {
@@ -256,7 +268,21 @@ export const TabUsuarios = () => {
   };
 
   return (
-    <div className="rounded-xl border border-border bg-surface-100 p-6">
+    <div
+      className={
+        modalOpen
+          ? "w-full max-w-[100vw] -mx-4 md:-mx-6"
+          : "rounded-xl border border-border bg-surface-100 p-6"
+      }
+    >
+      {error && (
+        <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+          {error}
+        </div>
+      )}
+
+      {!modalOpen && (
+        <>
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <h2 className="text-lg font-medium text-white">Usuarios</h2>
@@ -285,12 +311,6 @@ export const TabUsuarios = () => {
           </select>
         </div>
       </div>
-
-      {error && (
-        <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-          {error}
-        </div>
-      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-12 text-muted">
@@ -377,50 +397,59 @@ export const TabUsuarios = () => {
           </table>
         </div>
       )}
+        </>
+      )}
 
       {modalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
-          onClick={closeModal}
-        >
-          <div
-            className="rounded-xl border border-border bg-surface-100 p-6 w-full max-w-5xl shadow-xl max-h-[95vh] overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-6 pb-4 border-b border-border/50 shrink-0">
-              <h3 className="text-xl font-medium text-white flex items-center gap-3">
-                {editingId ? "Editar usuario" : "Nuevo usuario"}
-              </h3>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleCopyForm}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-surface-200 border border-border text-muted hover:text-white hover:bg-surface-50 transition"
-                >
-                  <Copy className="w-4 h-4" />
-                  Copiar
-                </button>
-                <button
-                  type="button"
-                  onClick={handlePasteForm}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-surface-200 border border-border text-muted hover:text-white hover:bg-surface-50 transition"
-                >
-                  <ClipboardPaste className="w-4 h-4" />
-                  Pegar
-                </button>
-                <div className="w-px h-6 bg-border mx-1"></div>
+        <div className="rounded-xl border border-border border-l-[5px] border-l-primary bg-surface-100 overflow-hidden flex flex-col shadow-2xl ring-1 ring-primary/15 min-h-[min(85vh,calc(100vh-10rem))]">
+            <div className="bg-gradient-to-r from-primary/30 via-surface-200/90 to-surface-100 px-4 py-4 md:px-8 border-b border-primary/25 shrink-0">
+              <div className="max-w-6xl mx-auto flex flex-col gap-4">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="p-2 rounded-lg text-muted hover:text-white hover:bg-surface-50"
+                  className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary-hover font-medium w-fit"
                 >
-                  <X className="w-6 h-6" />
+                  <ArrowLeft className="w-4 h-4" />
+                  Volver a la lista
                 </button>
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-semibold text-white flex flex-wrap items-center gap-2">
+                      {editingId ? "Editar usuario" : "Nuevo usuario"}
+                      {APP_VERSION ? (
+                        <span className="text-[11px] font-mono font-bold uppercase tracking-wide bg-primary text-black px-2.5 py-1 rounded-md shadow">
+                          Build {APP_VERSION}
+                        </span>
+                      ) : null}
+                    </h3>
+                    <p className="text-xs text-muted mt-1.5 max-w-xl">
+                      Pantalla completa (no modal). Los datos se guardan en Firestore al pulsar Guardar.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleCopyForm}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-surface-200/90 border border-border text-muted hover:text-white hover:bg-surface-50 transition"
+                    >
+                      <Copy className="w-4 h-4" />
+                      Copiar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePasteForm}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-surface-200/90 border border-border text-muted hover:text-white hover:bg-surface-50 transition"
+                    >
+                      <ClipboardPaste className="w-4 h-4" />
+                      Pegar
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 overflow-y-auto pr-2 pb-4">
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 overflow-y-auto pr-2 pb-4 px-4 md:px-8 pt-6 max-w-6xl mx-auto w-full">
                 {/* COLUMNA IZQUIERDA: DATOS GENERALES */}
                 <div className="space-y-5">
                   <div>
@@ -589,32 +618,35 @@ export const TabUsuarios = () => {
                   <div className="bg-surface-200/20 p-4 rounded-xl border border-border/50">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
                       <label className="block font-medium text-white">Módulos permitidos</label>
-                  <div className="flex gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={seleccionarTodosModulosForm}
-                      className="text-xs text-primary hover:underline"
-                    >
-                      Marcar todos
-                    </button>
-                    <span className="text-muted text-xs">·</span>
-                    <button type="button" onClick={limpiarModulosForm} className="text-xs text-muted hover:text-white">
-                      Quitar todos
-                    </button>
-                  </div>
-                </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={seleccionarTodosModulosForm}
+                          className="text-xs text-primary hover:underline"
+                        >
+                          Marcar todos
+                        </button>
+                        <span className="text-muted text-xs">·</span>
+                        <button type="button" onClick={limpiarModulosForm} className="text-xs text-muted hover:text-white">
+                          Quitar todos
+                        </button>
+                      </div>
+                    </div>
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 mt-2">
                       {modulosOrdenados.map((modulo) => {
                         const checked = (form.modulos || []).includes(modulo);
                         return (
-                          <label key={modulo} className={`flex items-center gap-3 px-3 py-2 cursor-pointer border rounded-lg transition-colors ${checked ? 'bg-primary/10 border-primary/30' : 'bg-surface-200/40 border-border hover:bg-surface-200/80'}`}>
+                          <label
+                            key={modulo}
+                            className={`flex items-center gap-3 px-3 py-2 cursor-pointer border rounded-lg transition-colors ${checked ? "bg-primary/10 border-primary/30" : "bg-surface-200/40 border-border hover:bg-surface-200/80"}`}
+                          >
                             <input
                               type="checkbox"
                               checked={checked}
                               onChange={(e) => toggleModuloEnForm(modulo, e.target.checked)}
                               className="w-4 h-4 rounded border-border bg-surface-200 text-primary focus:ring-primary shrink-0"
                             />
-                            <span className={`text-sm ${checked ? 'text-white font-medium' : 'text-white/70'}`}>
+                            <span className={`text-sm ${checked ? "text-white font-medium" : "text-white/70"}`}>
                               {etiquetaModulo(modulo)}
                             </span>
                           </label>
@@ -625,29 +657,36 @@ export const TabUsuarios = () => {
                 </div>
               </div>
 
-              <div className="flex gap-3 justify-end pt-5 border-t border-border mt-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="px-4 py-2 rounded-lg text-muted hover:text-white hover:bg-surface-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={
-                    saving ||
-                    !form.nombre?.trim() ||
-                    normalizarTokenAcceso(form.tokenAcceso).length !== 3
-                  }
-                  className="px-4 py-2 rounded-lg bg-primary text-black font-medium hover:bg-primary-hover disabled:opacity-50 flex items-center gap-2"
-                >
-                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {editingId ? "Guardar" : "Crear"}
-                </button>
+              <div className="flex gap-3 justify-between items-center pt-4 pb-6 px-4 md:px-8 border-t border-primary/20 bg-surface-200/20 mt-auto shrink-0 max-w-6xl mx-auto w-full">
+                <span className="text-[11px] text-muted">
+                  {APP_VERSION ? (
+                    <span className="font-mono text-primary/90">v{APP_VERSION}</span>
+                  ) : null}{" "}
+                  · Guardar escribe en Firestore
+                </span>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="px-4 py-2 rounded-lg text-muted hover:text-white hover:bg-surface-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={
+                      saving ||
+                      !form.nombre?.trim() ||
+                      normalizarTokenAcceso(form.tokenAcceso).length !== 3
+                    }
+                    className="px-4 py-2 rounded-lg bg-primary text-black font-medium hover:bg-primary-hover disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                    {editingId ? "Guardar" : "Crear"}
+                  </button>
+                </div>
               </div>
             </form>
-          </div>
         </div>
       )}
 

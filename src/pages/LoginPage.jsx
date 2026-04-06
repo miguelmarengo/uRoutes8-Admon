@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { LogIn, AlertCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { APP_VERSION } from "../lib/version";
 
 const loginSchema = z.object({
   username: z.string().min(1, "El usuario es obligatorio"),
@@ -64,6 +65,11 @@ export const LoginPage = () => {
             <p className="text-muted text-sm mt-1">
               Panel de administración
             </p>
+            {APP_VERSION ? (
+              <p className="text-muted/80 text-xs mt-2 font-mono tracking-wide">
+                Versión {APP_VERSION}
+              </p>
+            ) : null}
           </div>
 
           {authError && (

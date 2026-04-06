@@ -20,6 +20,7 @@ import {
   updateEmpresa,
   deleteEmpresa,
 } from "../../lib/firestore";
+import { APP_VERSION } from "../../lib/version";
 
 let clipboardEmpresaForm = null;
 
@@ -856,23 +857,32 @@ export const TabEmpresas = () => {
               </form>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 mt-2 border-t border-border/50 shrink-0">
-              <button
-                type="button"
-                onClick={closeModal}
-                className="px-4 py-2 rounded-lg text-muted hover:text-white hover:bg-surface-50 transition"
-              >
-                Cancelar
-              </button>
-              <button
-                form="form-empresa"
-                type="submit"
-                disabled={saving || !form.nombre?.trim()}
-                className="px-4 py-2 rounded-lg bg-primary text-black font-medium hover:bg-primary-hover transition disabled:opacity-50 flex items-center gap-2 min-w-[140px] justify-center"
-              >
-                {saving && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
-                {saving ? "Guardando…" : "Guardar empresa"}
-              </button>
+            <div className="flex justify-between items-center gap-3 pt-4 mt-2 border-t border-border/50 shrink-0">
+              {APP_VERSION ? (
+                <span className="text-[11px] font-mono text-muted" title="Versión del build">
+                  v{APP_VERSION}
+                </span>
+              ) : (
+                <span />
+              )}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="px-4 py-2 rounded-lg text-muted hover:text-white hover:bg-surface-50 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  form="form-empresa"
+                  type="submit"
+                  disabled={saving || !form.nombre?.trim()}
+                  className="px-4 py-2 rounded-lg bg-primary text-black font-medium hover:bg-primary-hover transition disabled:opacity-50 flex items-center gap-2 min-w-[140px] justify-center"
+                >
+                  {saving && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
+                  {saving ? "Guardando…" : "Guardar empresa"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
