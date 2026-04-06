@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Building2, Users, ScrollText, BarChart3, Loader2 } from "lucide-react";
 import { getEmpresas } from "../../lib/firestore";
 import { getUsuarios } from "../../lib/firestore";
-import { getBitacora } from "../../lib/firestore";
+import { getBitacora, getBitacoraTimestampMs } from "../../lib/firestore";
 
 const Card = ({ icon: Icon, label, value, sub }) => (
   <div className="rounded-xl border border-border bg-surface-200 p-6 flex items-start gap-4">
@@ -42,8 +42,8 @@ export const TabEstadisticas = () => {
         const now = Date.now();
         const last24h = 24 * 60 * 60 * 1000;
         const bitacoraRecientes = bitacora.filter((b) => {
-          const ts = b.timestamp?.toMillis?.() ?? b.timestamp;
-          return ts && now - ts < last24h;
+          const ts = getBitacoraTimestampMs(b);
+          return ts != null && now - ts < last24h;
         });
         setStats({
           empresas: empresas.length,

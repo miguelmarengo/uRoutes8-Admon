@@ -9,6 +9,7 @@ import {
   query,
   orderBy,
   where,
+  limit,
   serverTimestamp,
 } from "firebase/firestore";
 import { db, auth } from "../../config/firebase";
@@ -29,7 +30,21 @@ import { TOKEN_FIELDS_FIRESTORE, normalizarTokenAcceso } from "./usuarioToken";
  */
 const COL_EMPRESAS = "empresas";
 const COL_USUARIOS = "usuarios";
-const COL_BITACORA = "bitacora";
+/** Accesos de login (paquete `login` / `append_bitacora_acceso`). Antes: `bitacora`. */
+const COL_BITACORA = "bitacora_accesos";
+
+/** Milisegundos UTC para estadísticas y orden (soporta docs viejos con `timestamp`). */
+export const getBitacoraTimestampMs = (b) => {
+  if (!b) return null;
+  if (b.fechaServer?.toMillis) return b.fechaServer.toMillis();
+  if (b.timestamp?.toMillis) return b.timestamp.toMillis();
+  if (typeof b.timestampUnix === "number") return b.timestampUnix * 1000;
+  if (b.fechaUtcIso) {
+    const t = Date.parse(b.fechaUtcIso);
+    return Number.isNaN(t) ? null : t;
+  }
+  return null;
+};
 
 export const getEmpresas = async () => {
   const snap = await getDocs(
@@ -153,17 +168,21 @@ export const deleteUsuario = async (id) => {
   await deleteDoc(doc(db, COL_USUARIOS, id));
 };
 
+/**
+ * Bitácora de accesos (login). Una sola consulta por `fechaServer` + límite, sin índices compuestos;
+ * los filtros empresa/usuario se aplican en cliente (evita error "The query requires an index").
+ */
 export const getBitacora = async (filters = {}) => {
-  let q = query(
-    collection(db, COL_BITACORA),
-    orderBy("timestamp", "desc")
-  );
+  const cap = 1500;
+  const coll = collection(db, COL_BITACORA);
+  const q = query(coll, orderBy("fechaServer", "desc"), limit(cap));
+  const snap = await getDocs(q);
+  let rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   if (filters.empresaId) {
-    q = query(q, where("empresaId", "==", filters.empresaId));
+    rows = rows.filter((r) => (r.empresaId || "") === filters.empresaId);
   }
   if (filters.usuarioId) {
-    q = query(q, where("usuarioId", "==", filters.usuarioId));
+    rows = rows.filter((r) => (r.usuarioDocId || r.usuarioId || "") === filters.usuarioId);
   }
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return rows;
 };

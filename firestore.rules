@@ -7,7 +7,16 @@ service cloud.firestore {
     match /usuarios/{id} {
       allow read, write: if request.auth != null;
     }
+    /** Legado; la bitácora de login vive en `bitacora_accesos`. */
     match /bitacora/{id} {
+      allow read, write: if request.auth != null;
+    }
+    /** Accesos de login (lectura en pestaña Bitácora; escritura vía Admin SDK en backend). */
+    match /bitacora_accesos/{id} {
+      allow read, write: if request.auth != null;
+    }
+    /** Sesión del panel (`billingSessionAdmon.js`). */
+    match /billing_events/{id} {
       allow read, write: if request.auth != null;
     }
   }

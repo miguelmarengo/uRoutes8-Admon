@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Plus, Pencil, Trash2, X, Loader2, RefreshCw, Eye, EyeOff, Copy, ClipboardPaste } from "lucide-react";
 import { deleteField } from "firebase/firestore";
 import {
@@ -10,10 +10,18 @@ import {
 } from "../../lib/firestore";
 import { collectUsuarioBodegaIds } from "../../lib/clienteSesion";
 import { leerTokenDesdeUsuario, normalizarTokenAcceso, generarTokenAcceso } from "../../lib/usuarioToken";
-import { TODOS_LOS_MODULOS } from "../../lib/constants";
+import { TODOS_LOS_MODULOS, etiquetaModulo } from "../../lib/constants";
 let clipboardUsuarioForm = null;
 
 export const TabUsuarios = () => {
+  const modulosOrdenados = useMemo(
+    () =>
+      [...TODOS_LOS_MODULOS].sort((a, b) =>
+        etiquetaModulo(a).localeCompare(etiquetaModulo(b), "es", { sensitivity: "base" })
+      ),
+    []
+  );
+
   const [empresas, setEmpresas] = useState([]);
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -324,8 +332,13 @@ export const TabUsuarios = () => {
                   <td className="px-4 py-3 text-muted max-w-[220px] truncate" title={etiquetaBodegasAcceso(item)}>
                     {etiquetaBodegasAcceso(item)}
                   </td>
-                  <td className="px-4 py-3 text-muted max-w-[150px] truncate" title={(item.modulos || []).join(", ")}>
-                    {(item.modulos || []).length > 0 ? (item.modulos || []).join(", ") : "—"}
+                  <td
+                    className="px-4 py-3 text-muted max-w-[150px] truncate"
+                    title={(item.modulos || []).map((m) => etiquetaModulo(m)).join(", ")}
+                  >
+                    {(item.modulos || []).length > 0
+                      ? (item.modulos || []).map((m) => etiquetaModulo(m)).join(", ")
+                      : "—"}
                   </td>
                   <td className="px-4 py-3 text-center">
                     {item.activo !== false ? (
@@ -591,7 +604,7 @@ export const TabUsuarios = () => {
                   </div>
                 </div>
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 mt-2">
-                      {TODOS_LOS_MODULOS.map((modulo) => {
+                      {modulosOrdenados.map((modulo) => {
                         const checked = (form.modulos || []).includes(modulo);
                         return (
                           <label key={modulo} className={`flex items-center gap-3 px-3 py-2 cursor-pointer border rounded-lg transition-colors ${checked ? 'bg-primary/10 border-primary/30' : 'bg-surface-200/40 border-border hover:bg-surface-200/80'}`}>
@@ -601,7 +614,9 @@ export const TabUsuarios = () => {
                               onChange={(e) => toggleModuloEnForm(modulo, e.target.checked)}
                               className="w-4 h-4 rounded border-border bg-surface-200 text-primary focus:ring-primary shrink-0"
                             />
-                            <span className={`text-sm ${checked ? 'text-white font-medium' : 'text-white/70'}`}>{modulo}</span>
+                            <span className={`text-sm ${checked ? 'text-white font-medium' : 'text-white/70'}`}>
+                              {etiquetaModulo(modulo)}
+                            </span>
                           </label>
                         );
                       })}

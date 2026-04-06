@@ -1,14 +1,23 @@
 import { useState, useEffect } from "react";
 import { Loader2, Filter } from "lucide-react";
-import { getBitacora, getEmpresas, getUsuarios } from "../../lib/firestore";
+import { getBitacora, getEmpresas, getUsuarios, getBitacoraTimestampMs } from "../../lib/firestore";
 
-const formatTimestamp = (ts) => {
-  if (!ts) return "—";
-  const date = ts?.toDate ? ts.toDate() : new Date(ts);
-  return date.toLocaleString("es-ES", {
-    dateStyle: "short",
-    timeStyle: "medium",
-  });
+const formatTimestamp = (row) => {
+  const ms = getBitacoraTimestampMs(row);
+  if (ms != null) {
+    return new Date(ms).toLocaleString("es-ES", {
+      dateStyle: "short",
+      timeStyle: "medium",
+      timeZone: "UTC",
+    });
+  }
+  return "—";
+};
+
+const formatVersion = (row) => {
+  if (row.version && String(row.version).trim()) return row.version;
+  const parts = [row.versionApp, row.versionLogin].filter((x) => x && String(x).trim());
+  return parts.length ? parts.join(" · ") : "—";
 };
 
 export const TabBitacora = () => {
@@ -74,6 +83,18 @@ export const TabBitacora = () => {
     return u ? (u.nombre || u.email || u.id) : id;
   };
 
+  const displayUsuario = (item) => {
+    const n = (item.usuarioNombre || "").trim();
+    if (n) return n;
+    return item.usuarioDocId || item.usuarioId ? getUsuarioNombre(item.usuarioDocId || item.usuarioId) : "—";
+  };
+
+  const displayEmpresa = (item) => {
+    const n = (item.empresaNombre || "").trim();
+    if (n) return n;
+    return item.empresaId ? getEmpresaNombre(item.empresaId) : "—";
+  };
+
   return (
     <div className="rounded-xl border border-border bg-surface-100 p-6">
       <div className="flex flex-col gap-4 mb-6">
@@ -130,26 +151,30 @@ export const TabBitacora = () => {
           <table className="w-full text-left text-sm">
             <thead className="bg-surface-200 text-muted border-b border-border">
               <tr>
-                <th className="px-4 py-3 font-medium">Fecha / Hora</th>
+                <th className="px-4 py-3 font-medium">Fecha / hora (UTC)</th>
                 <th className="px-4 py-3 font-medium">Empresa</th>
                 <th className="px-4 py-3 font-medium">Usuario</th>
-                <th className="px-4 py-3 font-medium">Acción / Detalle</th>
+                <th className="px-4 py-3 font-medium">Módulo (login)</th>
+                <th className="px-4 py-3 font-medium">Versión</th>
               </tr>
             </thead>
             <tbody className="text-white divide-y divide-border">
               {list.map((item) => (
                 <tr key={item.id} className="hover:bg-surface-50">
                   <td className="px-4 py-3 text-muted whitespace-nowrap">
-                    {formatTimestamp(item.timestamp)}
+                    {formatTimestamp(item)}
                   </td>
                   <td className="px-4 py-3 text-muted">
-                    {getEmpresaNombre(item.empresaId)}
+                    {displayEmpresa(item)}
                   </td>
                   <td className="px-4 py-3 text-muted">
-                    {item.usuarioId ? getUsuarioNombre(item.usuarioId) : "—"}
+                    {displayUsuario(item)}
                   </td>
-                  <td className="px-4 py-3">
-                    {item.accion || item.mensaje || item.detalle || "—"}
+                  <td className="px-4 py-3 text-muted">
+                    {(item.moduloEntradaEtiqueta || item.moduloEntrada || "").trim() || "—"}
+                  </td>
+                  <td className="px-4 py-3 text-muted text-xs max-w-[220px] break-words">
+                    {formatVersion(item)}
                   </td>
                 </tr>
               ))}
